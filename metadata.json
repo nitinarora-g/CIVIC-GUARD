@@ -1,0 +1,6 @@
+{
+  "name": "Civic Complaint & Transparency Platform",
+  "description": "A community-driven civic complaint reporting and resolution tracking application with location verification, coin reward system, employee dashboards, and duplicate prevention.",
+  "requestFramePermissions": ["camera", "geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
