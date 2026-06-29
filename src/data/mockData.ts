@@ -10,7 +10,7 @@ export const DELHI_DISTRICTS = [
 ];
 
 export const STATES = [
-  'Delhi NCR',
+  'Delhi',
   'Karnataka',
   'Maharashtra',
   'Tamil Nadu',
@@ -34,7 +34,7 @@ export const mockUsers: Record<string, User> = {
     emailOrPhone: 'amit.kumar@gov.in',
     fullName: 'Amit Kumar (Assigned Officer)',
     role: 'officer',
-    state: 'Delhi NCR',
+    state: 'Delhi',
     district: 'New Delhi',
     coinBalance: 0,
     createdAt: '2026-04-01T09:00:00Z',
@@ -51,11 +51,11 @@ export const initialComplaints: Complaint[] = [
     reporterName: 'Rahul Sharma',
     title: 'Severe Waterlogging & Broken Drainage',
     description: 'The sewage drain near Connaught Place Radial 3 is completely choked. Rainwater has pooled to almost 1.5 feet, making the road completely impassable and causing massive traffic jams. Immediate clearance of the main drain line is required.',
-    imageUrl: 'https://images.unsplash.com/photo-1541888946425-d81bb19240f5?auto=format&fit=crop&w=600&q=80', // water/construction look
+    imageUrl: 'https://images.unsplash.com/photo-1547683905-f686c993aae5?auto=format&fit=crop&w=600&q=80', // realistic waterlogged flooded street
     latitude: 28.6304,
     longitude: 77.2177,
     address: 'Radial Road 3, Connaught Place, New Delhi - 110001',
-    state: 'Delhi NCR',
+    state: 'Delhi',
     district: 'New Delhi',
     status: 'pending',
     verificationsCount: 3,
@@ -68,11 +68,11 @@ export const initialComplaints: Complaint[] = [
     reporterName: 'Priya Patel',
     title: 'Hazardous Open High-Voltage Wire',
     description: 'A critical high-voltage electric wire is hanging barely 4 feet off the pavement right in front of the Central Secretariat Park gate. Extremely dangerous for children and morning walkers, especially in damp weather.',
-    imageUrl: 'https://images.unsplash.com/photo-1473341304170-971dccb5ac1e?auto=format&fit=crop&w=600&q=80', // wires look
+    imageUrl: 'https://images.unsplash.com/photo-1558486012-817176f84c6d?auto=format&fit=crop&w=600&q=80', // realistic hazardous hanging wires
     latitude: 28.6129,
     longitude: 77.2295,
     address: 'Kartavya Path Near Gate 2, Central Secretariat, New Delhi - 110001',
-    state: 'Delhi NCR',
+    state: 'Delhi',
     district: 'New Delhi',
     status: 'pending',
     verificationsCount: 0,
@@ -85,11 +85,11 @@ export const initialComplaints: Complaint[] = [
     reporterName: 'Vikram Singh',
     title: 'Illegal Garbage Dumping on Pavement',
     description: 'A massive pile of commercial garbage has been dumped illegally on the pedestrian walkway near Mandi House metro station. The stench is unbearable and it blocks the entire walking zone.',
-    imageUrl: 'https://images.unsplash.com/photo-1611284446314-60a58ac0deb9?auto=format&fit=crop&w=600&q=80', // trash
+    imageUrl: 'https://images.unsplash.com/photo-1530587191325-3db32d826c18?auto=format&fit=crop&w=600&q=80', // realistic street garbage dump
     latitude: 28.6254,
     longitude: 77.2345,
     address: 'Mandi House Circle Lane, New Delhi - 110001',
-    state: 'Delhi NCR',
+    state: 'Delhi',
     district: 'New Delhi',
     status: 'pending',
     verificationsCount: 1,
@@ -102,13 +102,13 @@ export const initialComplaints: Complaint[] = [
     reporterName: 'Rahul Sharma',
     title: 'Massive Potholes on Main Crossing',
     description: 'Huge structural pothole at the main traffic signal junction. It is causing vehicle damage and sudden braking leading to accidents.',
-    imageUrl: 'https://images.unsplash.com/photo-1515162305285-0293e4767cc2?auto=format&fit=crop&w=600&q=80', // pothole/damaged road
+    imageUrl: 'https://images.unsplash.com/photo-1597241285493-27c191140924?auto=format&fit=crop&w=600&q=80', // realistic deep muddy pothole
     latitude: 28.6441,
     longitude: 77.1895,
     address: 'Padam Singh Road Crossroad, Karol Bagh, New Delhi - 110005',
-    state: 'Delhi NCR',
+    state: 'Delhi',
     district: 'Central Delhi',
-    status: 'resolved',
+    status: 'pending',
     verificationsCount: 5,
     verifiedUserIds: ['u1', 'u2', 'u3', 'u4', 'u5'],
     resolvedBy: 'officer_karol_bagh',
@@ -211,7 +211,7 @@ export const initialLogs: SystemLog[] = [
     id: 'log_1',
     timestamp: '2026-06-26T04:05:12-07:00',
     type: 'auth',
-    message: 'Government Officer Amit Kumar logged in for District: New Delhi, State: Delhi NCR.'
+    message: 'Government Officer Amit Kumar logged in for District: New Delhi, State: Delhi.'
   },
   {
     id: 'log_2',

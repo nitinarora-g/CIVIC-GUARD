@@ -18,8 +18,8 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-brand-dark-bg text-brand-text-main flex items-center justify-center p-4 sm:p-8 font-sans select-none" id="dashboard-root">
-      <div className="w-full max-w-sm flex justify-center animate-fade-in" id="mobile-simulator-panel">
+    <div className="min-h-screen bg-brand-dark-bg text-brand-text-main flex items-center justify-center p-0 sm:p-4 md:p-8 font-sans select-none" id="dashboard-root">
+      <div className="w-full h-screen sm:h-auto sm:max-w-sm flex justify-center animate-fade-in" id="mobile-simulator-panel">
         <MobileSimulator 
           onAddLog={handleAddLog} 
           deviceLocation={deviceLocation}

@@ -2,14 +2,18 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Smartphone, MessageSquare, Coins, AlertCircle, MapPin, 
-  Camera, CheckCircle, Navigation, User, Map, Send, 
-  Lock, Plus, RotateCcw, ChevronRight, Sparkles, LogOut,
+  Camera, CheckCircle, Navigation, User, Map, Send, Search, 
+  Lock, Plus, RotateCcw, ChevronRight, ChevronDown, Sparkles, LogOut,
   Settings, Check, X, ShieldAlert, Award, Gift, Ticket,
-  CreditCard, ArrowDownRight, ArrowUpRight, Copy
+  CreditCard, ArrowDownRight, ArrowUpRight, Copy, Trophy, Brain,
+  AlertTriangle, Loader2
 } from 'lucide-react';
 import { Complaint, User as AppUser, ChatRoom, Message, SystemLog, UserRole } from '../types';
 import { initialComplaints, initialChatRooms, initialMessages, mockUsers, DELHI_DISTRICTS, STATES } from '../data/mockData';
+import { INDIA_STATES, INDIA_STATES_AND_DISTRICTS } from '../data/indiaData';
 import { CivicsGuardLogo } from './CivicsGuardLogo';
+import Leaderboard from './Leaderboard';
+import { AIImageSimilarityAudit } from './AIImageSimilarityAudit';
 
 interface MobileSimulatorProps {
   onAddLog: (type: SystemLog['type'], message: string, details?: any) => void;
@@ -17,6 +21,20 @@ interface MobileSimulatorProps {
   setDeviceLocation: (loc: { lat: number; lng: number; name: string }) => void;
   currentUser: AppUser | null;
   setCurrentUser: React.Dispatch<React.SetStateAction<AppUser | null>>;
+}
+
+export function getGoogleFallbackAvatar(fullName: string, email: string): string {
+  const colors = ['#4285F4', '#EA4335', '#FBBC05', '#34A853', '#7B1FA2', '#00897B', '#EF6C00', '#EC407A'];
+  let hash = 0;
+  const str = email || fullName || 'Google User';
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const index = Math.abs(hash) % colors.length;
+  const color = colors[index];
+  const initial = (fullName ? fullName.charAt(0) : (email ? email.charAt(0) : 'G')).toUpperCase();
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100"><circle cx="50" cy="50" r="50" fill="${color}"/><text x="50%" y="54%" font-family="system-ui, sans-serif" font-weight="bold" font-size="45" fill="#FFFFFF" text-anchor="middle" dominant-baseline="middle">${initial}</text></svg>`;
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 }
 
 export default function MobileSimulator({ 
@@ -100,6 +118,69 @@ export default function MobileSimulator({
   const [activeReviewComplaint, setActiveReviewComplaint] = useState<Complaint | null>(null);
   const [activeChallengeComplaint, setActiveChallengeComplaint] = useState<Complaint | null>(null);
 
+  // Expanded status for AI image similarity audits
+  const [expandedAudits, setExpandedAudits] = useState<Record<string, boolean>>({});
+  const toggleAuditExpanded = (id: string) => {
+    setExpandedAudits(prev => ({
+      ...prev,
+      [id]: !prev[id]
+    }));
+  };
+
+  // AI visual object comparison loading and error states
+  const [isAiReviewChecking, setIsAiReviewChecking] = useState(false);
+  const [aiReviewCheckError, setAiReviewCheckError] = useState<string | null>(null);
+
+  const [isAiResolveChecking, setIsAiResolveChecking] = useState(false);
+  const [aiResolveCheckError, setAiResolveCheckError] = useState<string | null>(null);
+
+  const [isAiChallengeChecking, setIsAiChallengeChecking] = useState(false);
+  const [aiChallengeCheckError, setAiChallengeCheckError] = useState<string | null>(null);
+
+  // Helper to call server-side AI image visual comparison
+  const verifyImageWithAI = async (
+    capturedImageUrl: string, 
+    originalImageUrl: string
+  ): Promise<{ success: boolean; score: number; reasoning: string }> => {
+    try {
+      const response = await fetch('/api/compare-images', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          image1: originalImageUrl,
+          image2: capturedImageUrl
+        })
+      });
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error || "Failed to analyze spatial similarity.");
+      }
+      const data = await response.json();
+      const score = data.similarityScore ?? 0;
+      const isMatch = score >= 75; // above 75% match is required
+      return {
+        success: isMatch,
+        score,
+        reasoning: data.reasoning || ""
+      };
+    } catch (err: any) {
+      console.error("verifyImageWithAI error:", err);
+      throw err;
+    }
+  };
+
+  // Google Account Selector States
+  const [isGoogleSelectorOpen, setIsGoogleSelectorOpen] = useState(false);
+  const [isGoogleSigningIn, setIsGoogleSigningIn] = useState<string | null>(null);
+  const [isAddingCustomGoogleAccount, setIsAddingCustomGoogleAccount] = useState(false);
+  const [customGoogleEmail, setCustomGoogleEmail] = useState('');
+  const [customGoogleName, setCustomGoogleName] = useState('');
+  const [customGoogleOtp, setCustomGoogleOtp] = useState('');
+  const [customGoogleOtpStep, setCustomGoogleOtpStep] = useState<'details' | 'otp'>('details');
+  const [deviceGmailAccounts, setDeviceGmailAccounts] = useState([
+    { email: 'nitinarora5969@gmail.com', fullName: 'Nitin Arora', avatar: 'https://unavatar.io/google/nitinarora5969@gmail.com' }
+  ]);
+
   // Custom Toast Notifications State
   const [toasts, setToasts] = useState<{ id: number; message: string; type: 'success' | 'error' | 'info' }[]>([]);
 
@@ -113,7 +194,7 @@ export default function MobileSimulator({
 
   // Coins & Reward System States
   const [isCoinsOpen, setIsCoinsOpen] = useState(false);
-  const [activeCoinsTab, setActiveCoinsTab] = useState<'redeem' | 'history'>('redeem');
+  const [activeCoinsTab, setActiveCoinsTab] = useState<'redeem' | 'history' | 'leaderboard'>('redeem');
   const [selectedVoucher, setSelectedVoucher] = useState<any | null>(null);
   const [phonePeNumber, setPhonePeNumber] = useState('');
   const [redeemedCode, setRedeemedCode] = useState<string | null>(null);
@@ -340,8 +421,12 @@ export default function MobileSimulator({
   
   // Government Onboarding
   const [isOnboarding, setIsOnboarding] = useState(false);
-  const [selectedState, setSelectedState] = useState('Delhi NCR');
+  const [selectedState, setSelectedState] = useState('Delhi');
   const [selectedDistrict, setSelectedDistrict] = useState('New Delhi');
+  const [isStateSelectorOpen, setIsStateSelectorOpen] = useState(false);
+  const [isDistrictSelectorOpen, setIsDistrictSelectorOpen] = useState(false);
+  const [stateSearchQuery, setStateSearchQuery] = useState('');
+  const [districtSearchQuery, setDistrictSearchQuery] = useState('');
 
   // Review (Auditing) State
   const [reviewSelfieCaptured, setReviewSelfieCaptured] = useState(false);
@@ -558,6 +643,13 @@ export default function MobileSimulator({
   const [resolveCameraError, setResolveCameraError] = useState<string | null>(null);
   const resolveVideoRef = useRef<HTMLVideoElement | null>(null);
 
+  // Government Officer Resolution GPS States
+  const [resolveGpsCaptured, setResolveGpsCaptured] = useState(false);
+  const [resolveLat, setResolveLat] = useState<number | null>(null);
+  const [resolveLng, setResolveLng] = useState<number | null>(null);
+  const [resolveAddress, setResolveAddress] = useState<string>('');
+  const [isResolveGpsLoading, setIsResolveGpsLoading] = useState(false);
+
   // Stop resolve camera stream when modal is closed
   useEffect(() => {
     if (!activeResolveComplaint) {
@@ -565,6 +657,11 @@ export default function MobileSimulator({
       setResolvePhotoCaptured(false);
       setResolvePhotoUrl('');
       setResolveCameraError(null);
+      setResolveGpsCaptured(false);
+      setResolveLat(null);
+      setResolveLng(null);
+      setResolveAddress('');
+      setIsResolveGpsLoading(false);
       if (resolveVideoStream) {
         resolveVideoStream.getTracks().forEach(track => track.stop());
         setResolveVideoStream(null);
@@ -616,8 +713,8 @@ export default function MobileSimulator({
     }
   };
 
-  const captureChallengePhoto = () => {
-    if (challengeVideoRef.current && challengeActiveCameraType) {
+  const captureChallengePhoto = async () => {
+    if (challengeVideoRef.current && challengeActiveCameraType && activeChallengeComplaint) {
       const video = challengeVideoRef.current;
       const canvas = document.createElement('canvas');
       canvas.width = video.videoWidth || 640;
@@ -626,20 +723,49 @@ export default function MobileSimulator({
       if (ctx) {
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         const dataUrl = canvas.toDataURL('image/jpeg');
-        if (challengeActiveCameraType === 'selfie') {
-          setChallengeSelfieUrl(dataUrl);
-          setChallengeSelfieCaptured(true);
-        } else {
-          setChallengePhotoUrl(dataUrl);
-          setChallengePhotoCaptured(true);
-        }
-        setIsChallengeCameraActive(false);
-        setChallengeActiveCameraType(null);
+        
+        const isPhoto = challengeActiveCameraType === 'photo';
+        
+        // Stop video stream immediately
         if (challengeVideoStream) {
           challengeVideoStream.getTracks().forEach(track => track.stop());
           setChallengeVideoStream(null);
         }
-        onAddLog('challenge', `Live dispute ${challengeActiveCameraType === 'selfie' ? 'selfie' : 'situation photo'} successfully captured.`);
+        setIsChallengeCameraActive(false);
+        
+        if (isPhoto) {
+          // Start AI verification for the situation photo
+          setIsAiChallengeChecking(true);
+          setAiChallengeCheckError(null);
+          setChallengeActiveCameraType(null);
+          onAddLog('challenge', 'Initiating live Gemini AI Spatial match check for captured dispute photo...');
+          
+          try {
+            const res = await verifyImageWithAI(dataUrl, activeChallengeComplaint.imageUrl);
+            if (res.success) {
+              setChallengePhotoUrl(dataUrl);
+              setChallengePhotoCaptured(true);
+              onAddLog('challenge', `AI Spatial Audit APPROVED: Captured dispute image matches reported site with ${res.score}% similarity. Object matched successfully.`);
+              showToast(`AI Spatial Match Approved! (${res.score}%)`, "success");
+            } else {
+              setAiChallengeCheckError(`Object match failed! Similarity: ${res.score}% (must be >= 75% to prevent fraud).\n\nAI Reasoning:\n${res.reasoning}`);
+              onAddLog('challenge', `AI Spatial Audit REJECTED: Captured image does not match reported site (similarity is ${res.score}%, below 75% threshold).`);
+              showToast(`Object match failed! (${res.score}%)`, "error");
+            }
+          } catch (err: any) {
+            console.error("AI verify failed:", err);
+            setAiChallengeCheckError(`AI spatial verification service error: ${err.message || "Please try again."}`);
+            showToast("AI Match error. Please try again.", "error");
+          } finally {
+            setIsAiChallengeChecking(false);
+          }
+        } else {
+          // Just a user selfie, capture normally without site-matching rules
+          setChallengeSelfieUrl(dataUrl);
+          setChallengeSelfieCaptured(true);
+          setChallengeActiveCameraType(null);
+          onAddLog('challenge', `Live dispute selfie successfully captured.`);
+        }
       }
     }
   };
@@ -731,8 +857,8 @@ export default function MobileSimulator({
     }
   };
 
-  const captureReviewPhoto = () => {
-    if (reviewVideoRef.current) {
+  const captureReviewPhoto = async () => {
+    if (reviewVideoRef.current && activeReviewComplaint) {
       const video = reviewVideoRef.current;
       const canvas = document.createElement('canvas');
       canvas.width = video.videoWidth || 640;
@@ -741,14 +867,38 @@ export default function MobileSimulator({
       if (ctx) {
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         const dataUrl = canvas.toDataURL('image/jpeg');
-        setReviewSelfieUrl(dataUrl);
-        setReviewSelfieCaptured(true);
-        setIsReviewCameraActive(false);
+        
+        // Stop video stream immediately
         if (reviewVideoStream) {
           reviewVideoStream.getTracks().forEach(track => track.stop());
           setReviewVideoStream(null);
         }
-        onAddLog('database', `Live situation picture successfully captured from camera.`);
+        setIsReviewCameraActive(false);
+        
+        // Start AI verification
+        setIsAiReviewChecking(true);
+        setAiReviewCheckError(null);
+        onAddLog('database', 'Initiating live Gemini AI Spatial match check for captured verification photo...');
+        
+        try {
+          const res = await verifyImageWithAI(dataUrl, activeReviewComplaint.imageUrl);
+          if (res.success) {
+            setReviewSelfieUrl(dataUrl);
+            setReviewSelfieCaptured(true);
+            onAddLog('database', `AI Spatial Audit APPROVED: Captured verification image matches reported site with ${res.score}% similarity. Object matched successfully.`);
+            showToast(`AI Spatial Match Approved! (${res.score}%)`, "success");
+          } else {
+            setAiReviewCheckError(`Object match failed! Similarity: ${res.score}% (must be >= 75% to prevent fraud).\n\nAI Reasoning:\n${res.reasoning}`);
+            onAddLog('database', `AI Spatial Audit REJECTED: Captured image does not match reported site (similarity is ${res.score}%, below 75% threshold).`);
+            showToast(`Object match failed! (${res.score}%)`, "error");
+          }
+        } catch (err: any) {
+          console.error("AI verify failed:", err);
+          setAiReviewCheckError(`AI spatial verification service error: ${err.message || "Please try again."}`);
+          showToast("AI Match error. Please try again.", "error");
+        } finally {
+          setIsAiReviewChecking(false);
+        }
       }
     }
   };
@@ -779,8 +929,8 @@ export default function MobileSimulator({
     }
   };
 
-  const captureResolvePhoto = () => {
-    if (resolveVideoRef.current) {
+  const captureResolvePhoto = async () => {
+    if (resolveVideoRef.current && activeResolveComplaint) {
       const video = resolveVideoRef.current;
       const canvas = document.createElement('canvas');
       canvas.width = video.videoWidth || 640;
@@ -789,35 +939,132 @@ export default function MobileSimulator({
       if (ctx) {
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         const dataUrl = canvas.toDataURL('image/jpeg');
-        setResolvePhotoUrl(dataUrl);
-        setResolvePhotoCaptured(true);
-        setIsResolveCameraActive(false);
+        
+        // Stop video stream immediately
         if (resolveVideoStream) {
           resolveVideoStream.getTracks().forEach(track => track.stop());
           setResolveVideoStream(null);
         }
-        onAddLog('database', `Live solved proof picture successfully captured from camera.`);
+        setIsResolveCameraActive(false);
+        
+        // Start AI verification
+        setIsAiResolveChecking(true);
+        setAiResolveCheckError(null);
+        onAddLog('database', 'Initiating live Gemini AI Spatial match check for captured resolution photo...');
+        
+        try {
+          const res = await verifyImageWithAI(dataUrl, activeResolveComplaint.imageUrl);
+          if (res.success) {
+            setResolvePhotoUrl(dataUrl);
+            setResolvePhotoCaptured(true);
+            onAddLog('database', `AI Spatial Audit APPROVED: Captured resolution image matches reported site with ${res.score}% similarity. Object matched successfully.`);
+            showToast(`AI Spatial Match Approved! (${res.score}%)`, "success");
+          } else {
+            setAiResolveCheckError(`Object match failed! Similarity: ${res.score}% (must be >= 75% to prevent fraud).\n\nAI Reasoning:\n${res.reasoning}`);
+            onAddLog('database', `AI Spatial Audit REJECTED: Captured image does not match reported site (similarity is ${res.score}%, below 75% threshold).`);
+            showToast(`Object match failed! (${res.score}%)`, "error");
+          }
+        } catch (err: any) {
+          console.error("AI verify failed:", err);
+          setAiResolveCheckError(`AI spatial verification service error: ${err.message || "Please try again."}`);
+          showToast("AI Match error. Please try again.", "error");
+        } finally {
+          setIsAiResolveChecking(false);
+        }
       }
     }
   };
 
-  const handleResolveFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        if (typeof reader.result === 'string') {
-          setResolvePhotoUrl(reader.result);
-          setResolvePhotoCaptured(true);
-          setIsResolveCameraActive(false);
-          if (resolveVideoStream) {
-            resolveVideoStream.getTracks().forEach(track => track.stop());
-            setResolveVideoStream(null);
-          }
-          onAddLog('database', `Live solved proof picture successfully uploaded.`);
-        }
-      };
-      reader.readAsDataURL(file);
+  const handleReviewDemoCapture = async (shouldSucceed: boolean) => {
+    if (!activeReviewComplaint) return;
+    const demoUrl = shouldSucceed 
+      ? 'https://images.unsplash.com/photo-1541888946425-d81bb19240f5?auto=format&fit=crop&w=600&q=80' // road repair/construction
+      : 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80'; // user face portrait
+    
+    setIsAiReviewChecking(true);
+    setAiReviewCheckError(null);
+    onAddLog('database', `Initiating live Gemini AI Spatial match check for simulated verification photo (${shouldSucceed ? 'Matching Site' : 'Selfie Face'})...`);
+    
+    try {
+      const res = await verifyImageWithAI(demoUrl, activeReviewComplaint.imageUrl);
+      if (res.success) {
+        setReviewSelfieUrl(demoUrl);
+        setReviewSelfieCaptured(true);
+        onAddLog('database', `AI Spatial Audit APPROVED: Simulated verification image matches reported site with ${res.score}% similarity. Object matched successfully.`);
+        showToast(`AI Spatial Match Approved! (${res.score}%)`, "success");
+      } else {
+        setAiReviewCheckError(`Object match failed! Similarity: ${res.score}% (must be >= 75% to prevent fraud).\n\nAI Reasoning:\n${res.reasoning}`);
+        onAddLog('database', `AI Spatial Audit REJECTED: Simulated verification image does not match reported site (similarity is ${res.score}%, below 75%).`);
+        showToast(`Object match failed! (${res.score}%)`, "error");
+      }
+    } catch (err: any) {
+      console.error("AI verify failed:", err);
+      setAiReviewCheckError(`AI spatial verification error: ${err.message || "Please try again."}`);
+      showToast("AI Match error. Please try again.", "error");
+    } finally {
+      setIsAiReviewChecking(false);
+    }
+  };
+
+  const handleResolveDemoCapture = async (shouldSucceed: boolean) => {
+    if (!activeResolveComplaint) return;
+    const demoUrl = shouldSucceed 
+      ? 'https://images.unsplash.com/photo-1599740831114-171d111e40a0?auto=format&fit=crop&w=600&q=80' // resolved road repair
+      : 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80'; // user face portrait
+    
+    setIsAiResolveChecking(true);
+    setAiResolveCheckError(null);
+    onAddLog('database', `Initiating live Gemini AI Spatial match check for simulated resolution photo (${shouldSucceed ? 'Matching Site' : 'Selfie Face'})...`);
+    
+    try {
+      const res = await verifyImageWithAI(demoUrl, activeResolveComplaint.imageUrl);
+      if (res.success) {
+        setResolvePhotoUrl(demoUrl);
+        setResolvePhotoCaptured(true);
+        onAddLog('database', `AI Spatial Audit APPROVED: Simulated resolution image matches reported site with ${res.score}% similarity. Object matched successfully.`);
+        showToast(`AI Spatial Match Approved! (${res.score}%)`, "success");
+      } else {
+        setAiResolveCheckError(`Object match failed! Similarity: ${res.score}% (must be >= 75% to prevent fraud).\n\nAI Reasoning:\n${res.reasoning}`);
+        onAddLog('database', `AI Spatial Audit REJECTED: Simulated resolution image does not match reported site (similarity is ${res.score}%, below 75%).`);
+        showToast(`Object match failed! (${res.score}%)`, "error");
+      }
+    } catch (err: any) {
+      console.error("AI verify failed:", err);
+      setAiResolveCheckError(`AI spatial verification error: ${err.message || "Please try again."}`);
+      showToast("AI Match error. Please try again.", "error");
+    } finally {
+      setIsAiResolveChecking(false);
+    }
+  };
+
+  const handleChallengeDemoCapture = async (shouldSucceed: boolean) => {
+    if (!activeChallengeComplaint) return;
+    const demoUrl = shouldSucceed 
+      ? 'https://images.unsplash.com/photo-1541888946425-d81bb19240f5?auto=format&fit=crop&w=600&q=80' // unresolved site
+      : 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80'; // user face portrait
+    
+    setIsAiChallengeChecking(true);
+    setAiChallengeCheckError(null);
+    onAddLog('challenge', `Initiating live Gemini AI Spatial match check for simulated dispute photo (${shouldSucceed ? 'Matching Site' : 'Selfie Face'})...`);
+    
+    try {
+      const res = await verifyImageWithAI(demoUrl, activeChallengeComplaint.imageUrl);
+      if (res.success) {
+        setChallengePhotoUrl(demoUrl);
+        setChallengePhotoCaptured(true);
+        onAddLog('challenge', `AI Spatial Audit APPROVED: Simulated dispute image matches reported site with ${res.score}% similarity. Object matched successfully.`);
+        showToast(`AI Spatial Match Approved! (${res.score}%)`, "success");
+      } else {
+        setAiChallengeCheckError(`Object match failed! Similarity: ${res.score}% (must be >= 75% to prevent fraud).\n\nAI Reasoning:\n${res.reasoning}`);
+        onAddLog('challenge', `AI Spatial Audit REJECTED: Simulated dispute image does not match reported site (similarity is ${res.score}%, below 75%).`);
+        showToast(`Object match failed! (${res.score}%)`, "error");
+      }
+    } catch (err: any) {
+      console.error("AI verify failed:", err);
+      setAiChallengeCheckError(`AI spatial verification error: ${err.message || "Please try again."}`);
+      showToast("AI Match error. Please try again.", "error");
+    } finally {
+      setIsAiChallengeChecking(false);
     }
   };
 
@@ -880,6 +1127,67 @@ export default function MobileSimulator({
       setReviewGpsCaptured(true);
       resolveAddress(deviceLocation.lat, deviceLocation.lng, deviceLocation.name).then(() => {
         setGpsLoading(false);
+      });
+    }
+  };
+
+  const fetchResolveLiveLocation = () => {
+    setIsResolveGpsLoading(true);
+    onAddLog('geofence', 'Initiating live resolve location check for officer...');
+
+    const resolveAddr = async (lat: number, lng: number, fallbackName: string) => {
+      try {
+        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}`, {
+          headers: {
+            'Accept-Language': 'en',
+            'User-Agent': 'MunicipalCitizenReporter/1.0'
+          }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.display_name) {
+            setResolveAddress(data.display_name);
+            onAddLog('geofence', `Officer resolution site location resolved: "${data.display_name}"`);
+            return;
+          }
+        }
+      } catch (err) {
+        console.warn("Reverse geocoding failed for resolve, using preset:", err);
+      }
+      setResolveAddress(fallbackName);
+    };
+
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          const lat = position.coords.latitude;
+          const lng = position.coords.longitude;
+          setResolveLat(lat);
+          setResolveLng(lng);
+          setResolveGpsCaptured(true);
+          onAddLog('geofence', `Officer resolution satellite GPS coordinates acquired: (${lat.toFixed(5)}, ${lng.toFixed(5)})`);
+          await resolveAddr(lat, lng, `Physical Location (${lat.toFixed(4)}, ${lng.toFixed(4)})`);
+          setIsResolveGpsLoading(false);
+        },
+        async (error) => {
+          console.warn("Officer resolve geolocation permission error or timeout:", error);
+          // Fallback to simulated deviceLocation
+          setResolveLat(deviceLocation.lat);
+          setResolveLng(deviceLocation.lng);
+          setResolveGpsCaptured(true);
+          onAddLog('geofence', `Officer resolution GPS fallback to active Virtual Device GPS: (${deviceLocation.lat.toFixed(5)}, ${deviceLocation.lng.toFixed(5)})`);
+          await resolveAddr(deviceLocation.lat, deviceLocation.lng, deviceLocation.name);
+          setIsResolveGpsLoading(false);
+        },
+        { enableHighAccuracy: true, timeout: 5000 }
+      );
+    } else {
+      // Geolocation not supported, fallback to simulated deviceLocation
+      setResolveLat(deviceLocation.lat);
+      setResolveLng(deviceLocation.lng);
+      setResolveGpsCaptured(true);
+      resolveAddr(deviceLocation.lat, deviceLocation.lng, deviceLocation.name).then(() => {
+        setIsResolveGpsLoading(false);
       });
     }
   };
@@ -1062,27 +1370,45 @@ export default function MobileSimulator({
     }
   };
 
-  const handleGoogleSignIn = async () => {
-    setAuthLoading(true);
-    try {
-      const response = await fetch('/api/google-login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
-      });
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to authenticate with Google');
-      }
+  const handleGoogleSignIn = (selectedEmail?: string, selectedName?: string) => {
+    const emailStr = typeof selectedEmail === 'string' ? selectedEmail : undefined;
+    const nameStr = typeof selectedName === 'string' ? selectedName : undefined;
 
-      setCurrentUser(data.user);
-      onAddLog('auth', `Citizen logged in via Google successfully. Balance: ${data.user.coinBalance} Coins`, data.user);
-    } catch (err: any) {
-      console.error(err);
-      onAddLog('auth', `Google Sign-In failed: ${err.message}`);
-      alert(`Google Sign-In failed: ${err.message}`);
-    } finally {
-      setAuthLoading(false);
+    if (!emailStr) {
+      setIsGoogleSelectorOpen(true);
+      return;
     }
+
+    setIsGoogleSigningIn(emailStr);
+    setAuthLoading(true);
+
+    setTimeout(() => {
+      fetch('/api/google-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: emailStr, fullName: nameStr })
+      })
+      .then(async (response) => {
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || 'Failed to authenticate with Google');
+        }
+
+        setCurrentUser(data.user);
+        onAddLog('auth', `Citizen logged in via Google successfully (${data.user.emailOrPhone}). Balance: ${data.user.coinBalance} Coins`, data.user);
+        showToast(`Logged in successfully as ${data.user.fullName}!`, "success");
+        setIsGoogleSelectorOpen(false);
+      })
+      .catch((err: any) => {
+        console.error(err);
+        onAddLog('auth', `Google Sign-In failed: ${err.message}`);
+        showToast(`Google Sign-In failed: ${err.message}`, "error");
+      })
+      .finally(() => {
+        setAuthLoading(false);
+        setIsGoogleSigningIn(null);
+      });
+    }, 850);
   };
 
   const handleOnboardingComplete = async () => {
@@ -1139,6 +1465,14 @@ export default function MobileSimulator({
     return R * c; // in metres
   };
 
+  const formatDistance = (meters: number) => {
+    if (meters < 1000) {
+      return `${Math.round(meters)} meters`;
+    } else {
+      return `${(meters / 1000).toFixed(2)} kms`;
+    }
+  };
+
   // 1. REPORT COMPLAINT: Captures and validates duplicates prior to creating
   const handlePostSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -1161,7 +1495,7 @@ export default function MobileSimulator({
     if (duplicate) {
       setDuplicateReport(duplicate);
       setPostStep('duplicate_alert');
-      onAddLog('geofence', `DUPLICATE BLOCKED: Spatial collision. Active issue '${duplicate.title}' is already registered at coordinate. Distance: ${Math.round(calculateDistanceInMeters(postLat, postLng, duplicate.latitude, duplicate.longitude))}m.`);
+      onAddLog('geofence', `DUPLICATE BLOCKED: Spatial collision. Active issue '${duplicate.title}' is already registered at coordinate. Distance: ${formatDistance(calculateDistanceInMeters(postLat, postLng, duplicate.latitude, duplicate.longitude))}.`);
       return;
     }
 
@@ -1264,15 +1598,15 @@ export default function MobileSimulator({
       activeReviewComplaint.longitude
     );
 
-    const PROXIMITY_LIMIT = 150; // meters
+    const PROXIMITY_LIMIT = 15; // meters
     const isSuccess = distance <= PROXIMITY_LIMIT;
 
-    onAddLog('geofence', `Auditing verifier coordinates (${latToCheck.toFixed(5)}, ${lngToCheck.toFixed(5)}) against target coordinates (${activeReviewComplaint.latitude.toFixed(5)}, ${activeReviewComplaint.longitude.toFixed(5)}). Calculated distance: ${Math.round(distance)}m.`);
+    onAddLog('geofence', `Auditing verifier coordinates (${latToCheck.toFixed(5)}, ${lngToCheck.toFixed(5)}) against target coordinates (${activeReviewComplaint.latitude.toFixed(5)}, ${activeReviewComplaint.longitude.toFixed(5)}). Calculated distance: ${formatDistance(distance)}.`);
 
     setTimeout(() => {
       if (!isSuccess) {
-        onAddLog('geofence', `VERIFICATION REJECTED: Coordinates mismatch. Verifier is ${Math.round(distance)}m away. Must be within ${PROXIMITY_LIMIT}m.`);
-        alert(`Verification Failed! You are ${Math.round(distance)}m away from the site. You must be within 150 meters of the incident location to verify it.`);
+        onAddLog('geofence', `VERIFICATION REJECTED: Coordinates mismatch. Verifier is ${formatDistance(distance)} away. Must be within ${PROXIMITY_LIMIT}m.`);
+        alert(`Verification Failed! You are ${formatDistance(distance)} away from the site. You must be within 15 meters of the incident location to verify it.`);
         setReviewSubmitting(false);
         return;
       }
@@ -1325,16 +1659,13 @@ export default function MobileSimulator({
 
   // 3. OFFICER RESOLUTION SUBMIT
   const handleOpenOfficerResolveModal = (comp: Complaint) => {
-    // Automatically teleport mock location to the complaint's coordinates
-    // to satisfy the geofence requirement seamlessly for testing/demo
-    setDeviceLocation({
-      lat: comp.latitude,
-      lng: comp.longitude,
-      name: `${comp.title} (Site Coordinates)`
-    });
-    onAddLog('geofence', `Auto-teleported Officer to exact site coordinates at ${comp.title} to satisfy spatial proof geofence (150m).`);
-    showToast(`Teleported to ${comp.title} coordinates!`, "success");
     setActiveResolveComplaint(comp);
+    setResolveGpsCaptured(false);
+    setResolveLat(null);
+    setResolveLng(null);
+    setResolveAddress('');
+    setIsResolveGpsLoading(false);
+    onAddLog('geofence', `Government Officer opened Resolution Portal for "${comp.title}". Enforcing real GPS geofence.`);
   };
 
   const handleOfficerResolve = (comp: Complaint, photoUrl: string) => {
@@ -1343,22 +1674,26 @@ export default function MobileSimulator({
       return;
     }
 
+    if (!resolveGpsCaptured) {
+      showToast("Please capture your GPS coordinates first to verify geofence proximity.", "error");
+      return;
+    }
+
+    const latToCheck = resolveLat !== null ? resolveLat : deviceLocation.lat;
+    const lngToCheck = resolveLng !== null ? resolveLng : deviceLocation.lng;
+
     const distance = calculateDistanceInMeters(
-      deviceLocation.lat,
-      deviceLocation.lng,
+      latToCheck,
+      lngToCheck,
       comp.latitude,
       comp.longitude
     );
-    const PROXIMITY_LIMIT = 150;
+    const PROXIMITY_LIMIT = 15;
 
     if (distance > PROXIMITY_LIMIT) {
-      // Auto-teleport back if distance got changed
-      setDeviceLocation({
-        lat: comp.latitude,
-        lng: comp.longitude,
-        name: `${comp.title} (Site Coordinates)`
-      });
-      onAddLog('geofence', `Auto-teleported back to site to submit proof.`);
+      showToast(`Verification Denied! You are currently ${formatDistance(distance)} away from the site. Must be within 15m.`, "error");
+      alert(`Dispute Denied! You are currently ${formatDistance(distance)} away from the site. You must be within 15 meters to mark the complaint resolved.`);
+      return;
     }
 
     // Resolve complaint on database!
@@ -1402,13 +1737,13 @@ export default function MobileSimulator({
       activeChallengeComplaint.longitude
     );
 
-    const PROXIMITY_LIMIT = 150;
+    const PROXIMITY_LIMIT = 15;
     
-    onAddLog('geofence', `Auditing dispute coordinate lock (${latToCheck.toFixed(5)}, ${lngToCheck.toFixed(5)}) against resolved complaint site (${activeChallengeComplaint.latitude.toFixed(5)}, ${activeChallengeComplaint.longitude.toFixed(5)}). Calculated distance: ${Math.round(distance)}m.`);
+    onAddLog('geofence', `Auditing dispute coordinate lock (${latToCheck.toFixed(5)}, ${lngToCheck.toFixed(5)}) against resolved complaint site (${activeChallengeComplaint.latitude.toFixed(5)}, ${activeChallengeComplaint.longitude.toFixed(5)}). Calculated distance: ${formatDistance(distance)}.`);
 
     if (distance > PROXIMITY_LIMIT) {
-      onAddLog('geofence', `CHALLENGE REJECTED: Citizens must be at the site to dispute a resolved status. Distance: ${Math.round(distance)}m.`);
-      alert(`Dispute Denied! You are currently ${Math.round(distance)} meters away from the resolved site. You must be within 150 meters to verify that the problem is unresolved.`);
+      onAddLog('geofence', `CHALLENGE REJECTED: Citizens must be at the site to dispute a resolved status. Distance: ${formatDistance(distance)}.`);
+      alert(`Dispute Denied! You are currently ${formatDistance(distance)} away from the resolved site. You must be within 15 meters to verify that the problem is unresolved.`);
       return;
     }
 
@@ -1458,25 +1793,12 @@ export default function MobileSimulator({
       createdAt: new Date().toISOString()
     };
 
-    const responseMsg: Message = {
-      id: `msg_auto_${Date.now()}`,
-      chatRoomId: activeChatRoomId,
-      senderId: currentUser?.role === 'officer' ? 'user_1' : 'user_2',
-      senderName: currentUser?.role === 'officer' ? 'Rahul Sharma' : 'Officer Amit Kumar',
-      senderRole: currentUser?.role === 'officer' ? 'citizen' : 'officer',
-      content: currentUser?.role === 'officer' 
-        ? "Acknowledged sir. I will keep an eye on site updates and verify."
-        : "Understood. The maintenance vehicle is scheduled to head out shortly.",
-      createdAt: new Date().toISOString()
-    };
-
-    // Save message and auto response to database!
+    // Save message to database!
     fetch('/api/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        message: newMsg,
-        responseMsg: responseMsg
+        message: newMsg
       })
     })
     .then(res => {
@@ -1484,21 +1806,21 @@ export default function MobileSimulator({
         // Force state update instantly
         setAllMessages(prev => ({
           ...prev,
-          [activeChatRoomId]: [...(prev[activeChatRoomId] || []), newMsg, responseMsg]
+          [activeChatRoomId]: [...(prev[activeChatRoomId] || []), newMsg]
         }));
         
         setChatRooms(prevRooms => prevRooms.map(room => {
           if (room.id === activeChatRoomId) {
             return {
               ...room,
-              lastMessage: responseMsg.content,
-              lastMessageAt: responseMsg.createdAt
+              lastMessage: newMsg.content,
+              lastMessageAt: newMsg.createdAt
             };
           }
           return room;
         }));
 
-        onAddLog('database', `Message and automatic response saved securely to database for Chat Room ${activeChatRoomId}.`);
+        onAddLog('database', `Message saved securely to database for Chat Room ${activeChatRoomId}.`);
       } else {
         alert("Failed to send message.");
       }
@@ -1510,6 +1832,78 @@ export default function MobileSimulator({
 
     setNewMessageText('');
     onAddLog('database', `Message sent securely on Chat Room ${activeChatRoomId}.`);
+  };
+
+  // Simulate a response from the other party on demand for solo testing
+  const handleTriggerSimulatedReply = () => {
+    if (!activeChatRoomId) return;
+    const room = chatRooms.find(r => r.id === activeChatRoomId);
+    
+    const senderRole = currentUser?.role === 'officer' ? 'citizen' : 'officer';
+    const senderId = currentUser?.role === 'officer' 
+      ? (room?.citizenId || 'usr_g_nitin') 
+      : 'officer_amit_kumar';
+    const senderName = currentUser?.role === 'officer' 
+      ? (room?.citizenName || 'Nitin Arora') 
+      : 'Officer Amit Kumar';
+
+    const replies = currentUser?.role === 'officer'
+      ? [
+          "Acknowledged sir. I will keep an eye on site updates and verify.",
+          "Thank you for the prompt action, sir!",
+          "Yes, I am near the location and will check it now.",
+          "Great, please let me know when it is resolved."
+        ]
+      : [
+          "Understood. The maintenance vehicle is scheduled to head out shortly.",
+          "I have assigned an inspection team to verify this coordinate point.",
+          "We are reviewing this report. Please stand by for updates.",
+          "Thank you for reporting. Our regional field officers are on the case."
+        ];
+
+    // Pick a random realistic reply
+    const randomReply = replies[Math.floor(Math.random() * replies.length)];
+
+    const simMsg: Message = {
+      id: `msg_auto_${Date.now()}`,
+      chatRoomId: activeChatRoomId,
+      senderId,
+      senderName,
+      senderRole,
+      content: randomReply,
+      createdAt: new Date().toISOString()
+    };
+
+    fetch('/api/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: simMsg
+      })
+    })
+    .then(res => {
+      if (res.ok) {
+        setAllMessages(prev => ({
+          ...prev,
+          [activeChatRoomId]: [...(prev[activeChatRoomId] || []), simMsg]
+        }));
+        
+        setChatRooms(prevRooms => prevRooms.map(r => {
+          if (r.id === activeChatRoomId) {
+            return {
+              ...r,
+              lastMessage: simMsg.content,
+              lastMessageAt: simMsg.createdAt
+            };
+          }
+          return r;
+        }));
+        onAddLog('database', `Simulated response from ${senderName} saved to database.`);
+      }
+    })
+    .catch(err => {
+      console.error("Error sending simulated message:", err);
+    });
   };
 
   // Filter complaints based on roles and active tabs
@@ -1525,7 +1919,7 @@ export default function MobileSimulator({
     }
 
     return true;
-  });
+  }).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
   const getMaskedEmailOrPhone = (val: string) => {
     if (!val) return '';
@@ -1554,28 +1948,22 @@ export default function MobileSimulator({
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
   return (
-    <div className="flex flex-col items-center space-y-6" id="simulator-canvas">
+    <div className="w-full h-full flex flex-col items-center" id="simulator-canvas">
       
       {/* 1. Mobile Device Frame */}
-      <div className="relative w-[340px] h-[670px] bg-[#0E0E0E] rounded-[44px] p-3.5 shadow-2xl border-4 border-brand-border select-none overflow-hidden" id="phone-frame-inner">
+      <div className="relative w-full h-screen sm:w-[340px] sm:h-[670px] bg-[#0E0E0E] sm:rounded-[44px] p-0 sm:p-3.5 shadow-none sm:shadow-2xl border-0 sm:border-4 sm:border-brand-border select-none overflow-hidden" id="phone-frame-inner">
         
         {/* Phone Speaker & Camera Bezel (Notch) */}
-        <div className="absolute top-0 left-1/2 transform -translate-x-1/2 w-40 h-6 bg-[#0E0E0E] rounded-b-2xl z-50 flex items-center justify-center">
+        <div className="hidden sm:flex absolute top-0 left-1/2 transform -translate-x-1/2 w-40 h-6 bg-[#0E0E0E] rounded-b-2xl z-50 items-center justify-center">
           <div className="w-16 h-1.5 bg-[#1F1F1F] rounded-full mb-1"></div>
           <div className="w-2.5 h-2.5 bg-brand-cyan-soft rounded-full ml-3 mb-1 border border-brand-cyan/20"></div>
         </div>
 
         {/* Live App Content Screen */}
-        <div className="w-full h-full bg-brand-dark-bg rounded-[32px] overflow-hidden relative flex flex-col font-sans border border-brand-border" id="mobile-app-screen">
+        <div className="w-full h-full bg-brand-dark-bg sm:rounded-[32px] overflow-hidden relative flex flex-col font-sans border-0 sm:border border-brand-border" id="mobile-app-screen">
           
           {currentUser ? (
             <>
-              {/* STAGE HEADER WITH carrier notifications */}
-              <div className="bg-[#141414]/80 backdrop-blur-md pt-5 pb-1 px-4 border-b border-brand-border flex items-center justify-between z-40 text-brand-text-dim">
-                <span className="text-[10px] font-mono font-bold tracking-tight">11:15 AM</span>
-                <span className="text-[9px] text-brand-text-dim font-mono tracking-widest">5G • 🔋100%</span>
-              </div>
-
               {/* PREMIUM APP BAR with exactly two top right icons: Messages and Coins */}
               <div className="bg-brand-dark-card px-4 py-2 border-b border-brand-border flex items-center justify-between z-40">
                 <div className="flex items-center gap-1.5">
@@ -1792,7 +2180,10 @@ export default function MobileSimulator({
                           <p className="text-xs text-brand-text-dim">No solved cases registered yet.</p>
                         </div>
                       ) : (
-                        complaints.filter(c => c.status === 'resolved').map(comp => (
+                        complaints
+                          .filter(c => c.status === 'resolved')
+                          .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+                          .map(comp => (
                           <div 
                             key={comp.id}
                             className="bg-brand-dark-card border border-brand-border rounded-xl p-3 shadow-sm space-y-3"
@@ -1824,6 +2215,8 @@ export default function MobileSimulator({
                                 <strong>Resolved by {comp.resolvedBy}:</strong> Verified through live on-site camera matching coordinates.
                               </p>
                             </div>
+
+
 
                             {/* Challenge Button (Citizen Only) */}
                             {currentUser.role === 'citizen' && (
@@ -2192,24 +2585,33 @@ export default function MobileSimulator({
                     <div className="space-y-2">
                       <div className="space-y-1">
                         <label className="text-[8px] font-bold uppercase text-brand-text-dim">Assigned State</label>
-                        <select
-                          value={selectedState}
-                          onChange={(e) => setSelectedState(e.target.value)}
-                          className="w-full bg-brand-dark-bg border border-brand-border rounded-lg p-2 text-xs text-brand-text-main"
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setStateSearchQuery('');
+                            setIsStateSelectorOpen(true);
+                          }}
+                          className="w-full bg-brand-dark-bg border border-brand-border rounded-lg p-2 text-xs text-brand-text-main focus:outline-none focus:border-brand-cyan transition-all flex items-center justify-between text-left hover:border-brand-cyan/55"
                         >
-                          {STATES.map(s => <option key={s} value={s}>{s}</option>)}
-                        </select>
+                          <span className="truncate">{selectedState || "Select State"}</span>
+                          <ChevronDown className="h-3.5 w-3.5 text-brand-text-dim shrink-0 ml-1.5" />
+                        </button>
                       </div>
 
                       <div className="space-y-1">
                         <label className="text-[8px] font-bold uppercase text-brand-text-dim">Assigned District</label>
-                        <select
-                          value={selectedDistrict}
-                          onChange={(e) => setSelectedDistrict(e.target.value)}
-                          className="w-full bg-brand-dark-bg border border-brand-border rounded-lg p-2 text-xs text-brand-text-main"
+                        <button
+                          type="button"
+                          disabled={!selectedState}
+                          onClick={() => {
+                            setDistrictSearchQuery('');
+                            setIsDistrictSelectorOpen(true);
+                          }}
+                          className="w-full bg-brand-dark-bg border border-brand-border rounded-lg p-2 text-xs text-brand-text-main focus:outline-none focus:border-brand-cyan transition-all flex items-center justify-between text-left hover:border-brand-cyan/55 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          {DELHI_DISTRICTS.map(d => <option key={d} value={d}>{d}</option>)}
-                        </select>
+                          <span className="truncate">{selectedDistrict || "Select District"}</span>
+                          <ChevronDown className="h-3.5 w-3.5 text-brand-text-dim shrink-0 ml-1.5" />
+                        </button>
                       </div>
                     </div>
 
@@ -2448,6 +2850,22 @@ export default function MobileSimulator({
                       <div ref={chatBottomRef} />
                     </div>
 
+                    {/* Interactive Multi-User Chat Helper and Simulation Tool */}
+                    <div className="px-3 py-1.5 bg-brand-dark-card border-t border-brand-border flex items-center justify-between gap-2">
+                      <span className="text-[8.5px] text-brand-text-dim flex items-center gap-1 font-mono">
+                        <span className="inline-block w-1.5 h-1.5 rounded-full bg-brand-cyan animate-pulse" />
+                        Live Multi-User Sync Active
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handleTriggerSimulatedReply}
+                        className="px-2 py-0.5 rounded bg-brand-cyan/10 hover:bg-brand-cyan/20 text-brand-cyan text-[8.5px] font-mono border border-brand-cyan/20 transition-all flex items-center gap-1 active:scale-95"
+                        title="Generate a context-aware simulated reply for solo testing"
+                      >
+                        🤖 Simulate Reply
+                      </button>
+                    </div>
+
                     {/* Input message form */}
                     <form onSubmit={handleSendMessage} className="bg-brand-dark-card p-2 border-t border-brand-border flex items-center gap-1.5">
                       <input
@@ -2596,7 +3014,15 @@ export default function MobileSimulator({
                         <div className="flex items-center gap-3">
                           <div className="h-10 w-10 rounded-full bg-brand-cyan-soft border border-brand-cyan/25 flex items-center justify-center overflow-hidden">
                             {currentUser.avatarUrl ? (
-                              <img src={currentUser.avatarUrl} alt="Avatar" className="h-full w-full object-cover animate-fade-in" referrerPolicy="no-referrer" />
+                              <img 
+                                src={currentUser.avatarUrl} 
+                                alt="Avatar" 
+                                className="h-full w-full object-cover animate-fade-in" 
+                                referrerPolicy="no-referrer"
+                                onError={(e) => {
+                                  e.currentTarget.src = getGoogleFallbackAvatar(currentUser.fullName, currentUser.emailOrPhone);
+                                }}
+                              />
                             ) : (
                               <User className="h-5 w-5 text-brand-cyan" />
                             )}
@@ -2907,14 +3333,29 @@ export default function MobileSimulator({
                         setSelectedVoucher(null);
                         setRedeemedCode(null);
                       }}
-                      className={`flex-1 py-1.5 text-[10.5px] font-bold rounded-lg transition-all uppercase tracking-wider flex items-center justify-center gap-1.5 ${
+                      className={`flex-1 py-1.5 text-[10px] font-bold rounded-lg transition-all uppercase tracking-wider flex items-center justify-center gap-1 ${
                         activeCoinsTab === 'redeem'
                           ? 'bg-brand-coin text-brand-dark-bg font-extrabold shadow-sm'
                           : 'text-brand-text-dim hover:text-brand-text-main'
                       }`}
                     >
                       <Gift className="h-3.5 w-3.5" />
-                      Claim Rewards
+                      Rewards
+                    </button>
+                    <button
+                      onClick={() => {
+                        setActiveCoinsTab('leaderboard');
+                        setSelectedVoucher(null);
+                        setRedeemedCode(null);
+                      }}
+                      className={`flex-1 py-1.5 text-[10px] font-bold rounded-lg transition-all uppercase tracking-wider flex items-center justify-center gap-1 ${
+                        activeCoinsTab === 'leaderboard'
+                          ? 'bg-brand-coin text-brand-dark-bg font-extrabold shadow-sm'
+                          : 'text-brand-text-dim hover:text-brand-text-main'
+                      }`}
+                    >
+                      <Trophy className="h-3.5 w-3.5" />
+                      Leaders
                     </button>
                     <button
                       onClick={() => {
@@ -2922,14 +3363,14 @@ export default function MobileSimulator({
                         setSelectedVoucher(null);
                         setRedeemedCode(null);
                       }}
-                      className={`flex-1 py-1.5 text-[10.5px] font-bold rounded-lg transition-all uppercase tracking-wider flex items-center justify-center gap-1.5 ${
+                      className={`flex-1 py-1.5 text-[10px] font-bold rounded-lg transition-all uppercase tracking-wider flex items-center justify-center gap-1 ${
                         activeCoinsTab === 'history'
                           ? 'bg-brand-coin text-brand-dark-bg font-extrabold shadow-sm'
                           : 'text-brand-text-dim hover:text-brand-text-main'
                       }`}
                     >
                       <RotateCcw className="h-3.5 w-3.5" />
-                      Coin Ledger
+                      Ledger
                     </button>
                   </div>
 
@@ -3171,6 +3612,14 @@ export default function MobileSimulator({
                           })}
                         </div>
                       )}
+                    </div>
+                  ) : activeCoinsTab === 'leaderboard' ? (
+                    <div className="pb-6">
+                      <Leaderboard 
+                        currentUser={currentUser}
+                        complaints={complaints}
+                        onAddLog={(type, msg) => onAddLog(type as any, msg)}
+                      />
                     </div>
                   ) : (
                     /* HISTORY COIN LEDGER TAB */
@@ -3442,24 +3891,46 @@ export default function MobileSimulator({
                   {/* Requirements List */}
                   <div className="space-y-3">
                     
-                    {/* Item 1: Live Selfie */}
+                    {/* Item 1: Live Snapshot */}
                     <div className="border border-brand-border p-3 rounded-xl space-y-2 bg-brand-dark-bg">
                       <div className="flex justify-between items-center">
                         <span className="text-[10px] font-bold text-brand-text-main">1. Live Situation Snapshot</span>
                         {reviewSelfieCaptured ? (
                           <span className="text-emerald-400 text-[10px] font-bold flex items-center gap-0.5"><Check className="h-3 w-3" /> Captured</span>
+                        ) : isAiReviewChecking ? (
+                          <span className="text-brand-cyan text-[9px] font-bold animate-pulse">Scanning Site...</span>
                         ) : (
                           <span className="text-rose-400 text-[9px] font-medium">Awaiting Capture</span>
                         )}
                       </div>
 
-                      {isReviewCameraActive ? (
+                      {/* AI Loading State */}
+                      {isAiReviewChecking && (
+                        <div className="py-4 text-center flex flex-col items-center justify-center bg-brand-cyan/5 rounded-xl border border-brand-cyan/25 animate-pulse">
+                          <Loader2 className="h-5 w-5 text-brand-cyan animate-spin mb-1.5" />
+                          <span className="text-[9.5px] font-bold text-brand-text-main uppercase tracking-wider">Gemini Object Match Scan...</span>
+                          <span className="text-[8px] text-brand-cyan/80 mt-0.5 font-mono">Comparing site objects with original reported incident...</span>
+                        </div>
+                      )}
+
+                      {/* AI Error Alert Display */}
+                      {aiReviewCheckError && !isAiReviewChecking && (
+                        <div className="p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-300 text-[8.5px] space-y-1">
+                          <div className="flex items-center gap-1.5 font-bold text-rose-400 uppercase tracking-wider">
+                            <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-rose-400" />
+                            Secure Object Match Failed
+                          </div>
+                          <p className="text-[8px] text-rose-400/80 italic font-mono pt-1">⚠️ Municipal Anti-Fraud: Face selfies or unrelated photos are blocked.</p>
+                        </div>
+                      )}
+
+                      {isReviewCameraActive && !isAiReviewChecking ? (
                         <div className="relative aspect-video rounded-lg overflow-hidden border border-brand-cyan/30 bg-black flex flex-col justify-end">
                           <video
-                            ref={reviewVideoRef}
-                            autoPlay
-                            playsInline
-                            className="absolute inset-0 w-full h-full object-cover"
+                             ref={reviewVideoRef}
+                             autoPlay
+                             playsInline
+                             className="absolute inset-0 w-full h-full object-cover"
                           />
                           <div className="absolute inset-x-0 bottom-0 p-2 bg-gradient-to-t from-black/80 to-transparent flex justify-center gap-2 z-10">
                             <button
@@ -3484,7 +3955,7 @@ export default function MobileSimulator({
                             </button>
                           </div>
                         </div>
-                      ) : reviewCameraError ? (
+                      ) : reviewCameraError && !isAiReviewChecking ? (
                         <div className="text-center p-2 border border-dashed border-rose-500/30 rounded-lg space-y-2 bg-rose-500/5">
                           <p className="text-[8.5px] text-rose-300 leading-snug">{reviewCameraError}</p>
                           <button
@@ -3496,7 +3967,7 @@ export default function MobileSimulator({
                             Retry Camera
                           </button>
                         </div>
-                      ) : reviewSelfieCaptured ? (
+                      ) : reviewSelfieCaptured && !isAiReviewChecking ? (
                         <div className="space-y-2">
                           <div className="h-28 w-28 rounded-xl overflow-hidden border border-emerald-500 mx-auto relative shadow-lg">
                             <img src={reviewSelfieUrl} className="w-full h-full object-cover" alt="selfie" />
@@ -3516,14 +3987,18 @@ export default function MobileSimulator({
                           </div>
                         </div>
                       ) : (
-                        <button
-                          type="button"
-                          onClick={startReviewCamera}
-                          className="w-full py-1.5 bg-brand-cyan-soft hover:bg-brand-cyan-soft/80 text-brand-cyan text-[10px] font-bold rounded-lg border border-brand-cyan/20 flex items-center justify-center gap-1 transition-all shadow-sm"
-                        >
-                          <Camera className="h-3.5 w-3.5" />
-                          Open Camera to Capture Situation
-                        </button>
+                        <div className="space-y-2">
+                          <button
+                            type="button"
+                            onClick={startReviewCamera}
+                            className="w-full py-1.5 bg-brand-cyan-soft hover:bg-brand-cyan-soft/80 text-brand-cyan text-[10px] font-bold rounded-lg border border-brand-cyan/20 flex items-center justify-center gap-1 transition-all shadow-sm"
+                          >
+                            <Camera className="h-3.5 w-3.5" />
+                            Open Camera to Capture Situation
+                          </button>
+
+
+                        </div>
                       )}
                     </div>
 
@@ -3587,14 +4062,14 @@ export default function MobileSimulator({
                               activeReviewComplaint.latitude,
                               activeReviewComplaint.longitude
                             );
-                            const withinLimit = dist <= 150;
+                            const withinLimit = dist <= 15;
                             return (
                               <div className="mt-2 p-1.5 rounded bg-brand-dark-bg border border-brand-border/40 flex items-center justify-between">
                                 <span className="text-[8.5px] font-bold uppercase tracking-wider text-brand-text-dim">Proximity Status:</span>
                                 {withinLimit ? (
-                                  <span className="text-emerald-400 font-bold font-mono text-[9px]">✓ Matched ({Math.round(dist)}m away)</span>
+                                  <span className="text-emerald-400 font-bold font-mono text-[9px]">✓ Matched ({formatDistance(dist)} away)</span>
                                 ) : (
-                                  <span className="text-rose-400 font-bold font-mono text-[9px]">❌ Fail ({Math.round(dist)}m away)</span>
+                                  <span className="text-rose-400 font-bold font-mono text-[9px]">❌ Fail ({formatDistance(dist)} away)</span>
                                 )}
                               </div>
                             );
@@ -3627,7 +4102,7 @@ export default function MobileSimulator({
                       activeReviewComplaint.latitude,
                       activeReviewComplaint.longitude
                     );
-                    const withinLimit = dist <= 150;
+                    const withinLimit = dist <= 15;
                     return (
                       <button
                         onClick={handleVerifySubmit}
@@ -3640,7 +4115,7 @@ export default function MobileSimulator({
                   })()}
 
                   <div className="bg-brand-cyan-soft/5 p-2.5 rounded-lg border border-brand-cyan/15 text-[8px] text-brand-text-dim leading-snug font-light">
-                    📌 <strong>Precision Distance Check:</strong> Verifiers must be located within 150 meters of the reported incident coordinates to validate and earn contribution rewards.
+                    📌 <strong>Precision Distance Check:</strong> Verifiers must be located within 15 meters of the reported incident coordinates to validate and earn contribution rewards.
                   </div>
                 </div>
               </motion.div>
@@ -3681,19 +4156,41 @@ export default function MobileSimulator({
 
                   {/* Requirements List */}
                   <div className="space-y-3">
-                    
                     {/* Item 1: Live Solved Photo */}
                     <div className="border border-brand-border p-3 rounded-xl space-y-2 bg-brand-dark-bg">
                       <div className="flex justify-between items-center">
                         <span className="text-[10px] font-bold text-brand-text-main">1. Snap Solved Work Proof (Live)</span>
                         {resolvePhotoCaptured ? (
                           <span className="text-emerald-400 text-[10px] font-bold flex items-center gap-0.5"><Check className="h-3 w-3" /> Captured</span>
+                        ) : isAiResolveChecking ? (
+                          <span className="text-brand-cyan text-[9px] font-bold animate-pulse">Scanning Site...</span>
                         ) : (
                           <span className="text-rose-400 text-[9px] font-medium animate-pulse">Awaiting Capture</span>
                         )}
                       </div>
 
-                      {isResolveCameraActive ? (
+                      {/* AI Loading State */}
+                      {isAiResolveChecking && (
+                        <div className="py-4 text-center flex flex-col items-center justify-center bg-brand-cyan/5 rounded-xl border border-brand-cyan/25 animate-pulse">
+                          <Loader2 className="h-5 w-5 text-brand-cyan animate-spin mb-1.5" />
+                          <span className="text-[9.5px] font-bold text-brand-text-main uppercase tracking-wider">Gemini Object Match Scan...</span>
+                          <span className="text-[8px] text-brand-cyan/80 mt-0.5 font-mono">Comparing site objects with original reported incident...</span>
+                        </div>
+                      )}
+
+                      {/* AI Error Alert Display */}
+                      {aiResolveCheckError && !isAiResolveChecking && (
+                        <div className="p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-300 text-[8.5px] space-y-1">
+                          <div className="flex items-center gap-1.5 font-bold text-rose-400 uppercase tracking-wider">
+                            <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-rose-400" />
+                            Secure Object Match Failed
+                          </div>
+                          <p className="font-light leading-snug whitespace-pre-line">{aiResolveCheckError}</p>
+                          <p className="text-[8px] text-rose-400/80 italic font-mono pt-1">⚠️ Municipal Anti-Fraud: Face selfies or unrelated photos are blocked.</p>
+                        </div>
+                      )}
+
+                      {isResolveCameraActive && !isAiResolveChecking ? (
                         <div className="relative aspect-video rounded-lg overflow-hidden border border-emerald-500/30 bg-black flex flex-col justify-end">
                           <video
                             ref={resolveVideoRef}
@@ -3724,12 +4221,12 @@ export default function MobileSimulator({
                             </button>
                           </div>
                         </div>
-                      ) : resolvePhotoCaptured ? (
+                      ) : resolvePhotoCaptured && !isAiResolveChecking ? (
                         <div className="space-y-2">
                           <div className="h-32 w-full rounded-xl overflow-hidden border border-emerald-500 relative shadow-lg">
                             <img src={resolvePhotoUrl} className="w-full h-full object-cover" alt="solved proof" />
                           </div>
-                          <div className="flex justify-center gap-2">
+                          <div className="flex justify-center">
                             <button
                               type="button"
                               onClick={() => {
@@ -3737,56 +4234,48 @@ export default function MobileSimulator({
                                 setResolvePhotoUrl('');
                                 startResolveCamera();
                               }}
-                              className="px-2.5 py-1 text-[8.5px] font-bold text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/10 rounded-lg transition-colors uppercase tracking-wider"
+                              className="px-4 py-1.5 text-[9px] font-bold text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/10 rounded-lg transition-colors uppercase tracking-wider flex items-center gap-1"
                             >
-                              Retake Picture
+                              <Camera className="h-3.5 w-3.5" />
+                              Retake Live Picture
                             </button>
-                            <label
-                              htmlFor="resolve-file-input"
-                              className="px-2.5 py-1 text-[8.5px] font-bold text-cyan-400 border border-cyan-500/20 hover:bg-cyan-500/10 rounded-lg transition-colors uppercase tracking-wider cursor-pointer flex items-center justify-center"
-                            >
-                              Upload Different File
-                            </label>
-                            <input
-                              type="file"
-                              accept="image/*"
-                              onChange={handleResolveFileChange}
-                              className="hidden"
-                              id="resolve-file-input"
-                            />
                           </div>
                         </div>
                       ) : (
                         <div className="space-y-2">
-                          <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={startResolveCamera}
+                            className="w-full py-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 text-[10px] font-bold rounded-lg border border-emerald-500/20 flex items-center justify-center gap-1 transition-all shadow-sm"
+                          >
+                            <Camera className="h-3.5 w-3.5" />
+                            Open Live Camera
+                          </button>
+
+                          {/* Dual Simulation triggers to showcase success and failure modes */}
+                          <div className="grid grid-cols-2 gap-2 pt-1">
                             <button
                               type="button"
-                              onClick={startResolveCamera}
-                              className="flex-1 py-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 text-[10px] font-bold rounded-lg border border-emerald-500/20 flex items-center justify-center gap-1 transition-all shadow-sm"
+                              onClick={() => handleResolveDemoCapture(true)}
+                              className="py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 text-[9px] font-bold rounded-lg border border-emerald-500/20 flex items-center justify-center gap-1 transition-all shadow-sm cursor-pointer"
                             >
-                              <Camera className="h-3.5 w-3.5" />
-                              Open Live Camera
+                              <Sparkles className="h-3 w-3 text-emerald-400" />
+                              Simulate Site Match
                             </button>
-                            <label
-                              htmlFor="resolve-file-input"
-                              className="flex-1 py-2 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 text-[10px] font-bold rounded-lg border border-cyan-500/20 flex items-center justify-center gap-1 transition-all shadow-sm cursor-pointer"
+                            <button
+                              type="button"
+                              onClick={() => handleResolveDemoCapture(false)}
+                              className="py-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 text-[9px] font-bold rounded-lg border border-rose-500/20 flex items-center justify-center gap-1 transition-all shadow-sm cursor-pointer"
                             >
-                              <Camera className="h-3.5 w-3.5" />
-                              Upload Solved Photo
-                            </label>
-                            <input
-                              type="file"
-                              accept="image/*"
-                              onChange={handleResolveFileChange}
-                              className="hidden"
-                              id="resolve-file-input"
-                            />
+                              <X className="h-3 w-3 text-rose-400" />
+                              Simulate Selfie Fail
+                            </button>
                           </div>
 
                           {resolveCameraError && (
                             <div className="text-center p-2 border border-dashed border-rose-500/30 rounded-lg bg-rose-500/5">
                               <p className="text-[8.5px] text-rose-300 leading-snug">{resolveCameraError}</p>
-                              <p className="text-[8px] text-brand-text-dim mt-1">Please upload the live status photo manually instead using the "Upload Solved Photo" button.</p>
+                              <p className="text-[8px] text-brand-text-dim mt-1">Please use the simulated proof buttons above to capture and verify with AI inside this browser.</p>
                             </div>
                           )}
                         </div>
@@ -3794,26 +4283,125 @@ export default function MobileSimulator({
                     </div>
 
                     {/* Item 2: GPS coordinate matching info */}
-                    <div className="border border-brand-border p-3 rounded-xl space-y-2 bg-brand-dark-bg text-[10px]">
-                      <div className="flex justify-between items-center text-emerald-400 font-bold">
-                        <span>2. GPS Spatial Presence</span>
-                        <span className="flex items-center gap-0.5"><Check className="h-3 w-3" /> Matches exact geofence</span>
+                    <div className="border border-brand-border p-3 rounded-xl space-y-2 bg-brand-dark-bg">
+                      <div className="flex justify-between items-center">
+                        <span className="text-[10px] font-bold text-brand-text-main">2. GPS Spatial Corroboration</span>
+                        {resolveGpsCaptured ? (
+                          <span className="text-emerald-400 text-[10px] font-bold flex items-center gap-0.5"><Check className="h-3 w-3" /> Coordinates Locked</span>
+                        ) : (
+                          <span className="text-rose-400 text-[9px] font-medium animate-pulse">Lock Needed</span>
+                        )}
                       </div>
-                      <p className="text-[9px] text-brand-text-dim leading-relaxed">
-                        Your device is currently located within the required 150m geofence area. Distance: <span className="text-emerald-400 font-bold">{Math.round(calculateDistanceInMeters(deviceLocation.lat, deviceLocation.lng, activeResolveComplaint.latitude, activeResolveComplaint.longitude))}m</span>. Live picture proof coordinates are matching perfectly.
-                      </p>
+
+                      {!resolveGpsCaptured ? (
+                        <button
+                          type="button"
+                          onClick={fetchResolveLiveLocation}
+                          disabled={isResolveGpsLoading}
+                          className="w-full py-1.5 bg-brand-cyan-soft hover:bg-brand-cyan-soft/80 text-brand-cyan text-[10px] font-bold rounded-lg border border-brand-cyan/20 flex items-center justify-center gap-1 transition-all disabled:opacity-60"
+                        >
+                          {isResolveGpsLoading ? (
+                            <>
+                              <RotateCcw className="h-3.5 w-3.5 animate-spin" />
+                              Acquiring GPS Satellite Lock...
+                            </>
+                          ) : (
+                            <>
+                              <MapPin className="h-3.5 w-3.5 text-brand-cyan animate-pulse" />
+                              Connect GPS & Resolve Location
+                            </>
+                          )}
+                        </button>
+                      ) : (
+                        <div className="space-y-1.5 text-[10px]">
+                          <div className="p-1.5 bg-[#0e0e0e] border border-brand-border rounded font-mono text-[9px] text-brand-cyan">
+                            <span className="text-brand-text-dim">Resolved Address: </span> 
+                            <span className="text-brand-text-main font-sans text-[10px] block mt-0.5 leading-snug">{resolveAddress || "Physical Geolocation site"}</span>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-2 text-[8px] font-mono pt-1 text-brand-text-dim">
+                            <div>
+                              <span className="block text-brand-text-dim">YOUR GPS POSITION</span>
+                              <span className="text-brand-text-main font-semibold text-[9px]">
+                                {(resolveLat !== null ? resolveLat : deviceLocation.lat).toFixed(5)}, {(resolveLng !== null ? resolveLng : deviceLocation.lng).toFixed(5)}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="block text-brand-text-dim">TARGET INCIDENT</span>
+                              <span className="text-brand-text-main font-semibold text-[9px]">
+                                {activeResolveComplaint.latitude.toFixed(5)}, {activeResolveComplaint.longitude.toFixed(5)}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Distance calculation */}
+                          {(() => {
+                            const dist = calculateDistanceInMeters(
+                              resolveLat !== null ? resolveLat : deviceLocation.lat,
+                              resolveLng !== null ? resolveLng : deviceLocation.lng,
+                              activeResolveComplaint.latitude,
+                              activeResolveComplaint.longitude
+                            );
+                            const withinLimit = dist <= 15;
+                            return (
+                              <div className="mt-2 p-1.5 rounded bg-brand-dark-bg border border-brand-border/40 flex items-center justify-between">
+                                <span className="text-[8.5px] font-bold uppercase tracking-wider text-brand-text-dim">Proximity Status:</span>
+                                {withinLimit ? (
+                                  <span className="text-emerald-400 font-bold font-mono text-[9px]">✓ Matched ({formatDistance(dist)} away)</span>
+                                ) : (
+                                  <span className="text-rose-400 font-bold font-mono text-[9px]">❌ Fail ({formatDistance(dist)} away)</span>
+                                )}
+                              </div>
+                            );
+                          })()}
+
+                          <div className="flex justify-end pt-0.5">
+                            <button
+                              type="button"
+                              onClick={fetchResolveLiveLocation}
+                              disabled={isResolveGpsLoading}
+                              className="text-[8.5px] text-brand-cyan hover:underline font-mono uppercase tracking-wider font-semibold disabled:opacity-50"
+                            >
+                              {isResolveGpsLoading ? 'Resyncing GPS...' : '🔄 Re-sync Location'}
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
+
+                    {/* Item 3: AI Spatial Match Audit */}
+                    {resolvePhotoCaptured && (
+                      <div className="border border-brand-border p-3 rounded-xl space-y-2 bg-brand-dark-bg">
+                        <span className="text-[10px] font-bold text-brand-text-main block">3. AI Location Similarity Match</span>
+                        <AIImageSimilarityAudit 
+                          originalImageUrl={activeResolveComplaint.imageUrl}
+                          compareImageUrl={resolvePhotoUrl}
+                          title="Audit Resolve vs. Original Complaint"
+                        />
+                      </div>
+                    )}
 
                   </div>
 
                   {/* Submission trigger */}
-                  <button
-                    onClick={() => handleOfficerResolve(activeResolveComplaint, resolvePhotoUrl)}
-                    disabled={!resolvePhotoCaptured}
-                    className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-brand-dark-bg disabled:text-brand-text-dim disabled:border-brand-border text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-all"
-                  >
-                    Submit Proof & Mark Resolved
-                  </button>
+                  {(() => {
+                    const dist = calculateDistanceInMeters(
+                      resolveLat !== null ? resolveLat : deviceLocation.lat,
+                      resolveLng !== null ? resolveLng : deviceLocation.lng,
+                      activeResolveComplaint.latitude,
+                      activeResolveComplaint.longitude
+                    );
+                    const withinLimit = dist <= 15;
+                    return (
+                      <button
+                        onClick={() => handleOfficerResolve(activeResolveComplaint, resolvePhotoUrl)}
+                        disabled={!resolvePhotoCaptured || !resolveGpsCaptured || !withinLimit}
+                        className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-brand-dark-bg disabled:text-brand-text-dim disabled:border-brand-border text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-all"
+                      >
+                        Submit Proof & Mark Resolved
+                      </button>
+                    );
+                  })()}
 
                   <div className="bg-emerald-500/5 p-2.5 rounded-lg border border-emerald-500/15 text-[8px] text-brand-text-dim leading-snug font-light">
                     📌 <strong>Resolution Proof Audit:</strong> Officers must submit a live work photo on-site. The photo is cryptographically stamped with GPS coordinates and recorded in the municipal public ledger.
@@ -3857,19 +4445,36 @@ export default function MobileSimulator({
                     <p className="text-[9px] text-brand-text-dim flex items-center gap-1">
                       <MapPin className="h-3 w-3 text-rose-400/80" /> {activeChallengeComplaint.address}
                     </p>
-                    <p className="text-[9px] text-rose-300 bg-rose-500/5 border border-rose-500/10 p-2 rounded-lg leading-relaxed font-light">
-                      ⚠️ <strong>Falsification Shield:</strong> Disputing a solved status requires active photographic verification and GPS sensor coordinates matched precisely within 150m of the site.
-                    </p>
                   </div>
 
                   {/* Inputs */}
                   <div className="space-y-3">
-                    
                     {/* Unresolved photo input with real live camera feed */}
                     <div className="border border-brand-border p-3 rounded-xl space-y-2 bg-brand-dark-bg">
                       <span className="text-[9px] font-bold text-brand-text-dim uppercase tracking-wider block">1. Snap Unresolved Issue Situation</span>
                       
-                      {isChallengeCameraActive && challengeActiveCameraType === 'photo' ? (
+                      {/* AI Loading State */}
+                      {isAiChallengeChecking && (
+                        <div className="py-4 text-center flex flex-col items-center justify-center bg-brand-cyan/5 rounded-xl border border-brand-cyan/25 animate-pulse">
+                          <Loader2 className="h-5 w-5 text-brand-cyan animate-spin mb-1.5" />
+                          <span className="text-[9.5px] font-bold text-brand-text-main uppercase tracking-wider">Gemini Object Match Scan...</span>
+                          <span className="text-[8px] text-brand-cyan/80 mt-0.5 font-mono">Comparing site objects with original reported incident...</span>
+                        </div>
+                      )}
+
+                      {/* AI Error Alert Display */}
+                      {aiChallengeCheckError && !isAiChallengeChecking && (
+                        <div className="p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-300 text-[8.5px] space-y-1">
+                          <div className="flex items-center gap-1.5 font-bold text-rose-400 uppercase tracking-wider">
+                            <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-rose-400" />
+                            Secure Object Match Failed
+                          </div>
+                          <p className="font-light leading-snug whitespace-pre-line">{aiChallengeCheckError}</p>
+                          <p className="text-[8px] text-rose-400/80 italic font-mono pt-1">⚠️ Municipal Anti-Fraud: Face selfies or unrelated photos are blocked.</p>
+                        </div>
+                      )}
+
+                      {isChallengeCameraActive && challengeActiveCameraType === 'photo' && !isAiChallengeChecking ? (
                         <div className="space-y-2">
                           <div className="h-40 rounded-lg overflow-hidden border border-brand-cyan/30 relative bg-[#0d0d0d] shadow-inner">
                             <video 
@@ -3891,7 +4496,7 @@ export default function MobileSimulator({
                             Capture Situation Snapshot
                           </button>
                         </div>
-                      ) : challengePhotoCaptured ? (
+                      ) : challengePhotoCaptured && !isAiChallengeChecking ? (
                         <div className="space-y-2">
                           <div className="h-28 w-40 rounded-xl overflow-hidden border border-emerald-500 mx-auto relative shadow-md">
                             <img src={challengePhotoUrl} className="w-full h-full object-cover" alt="Issue proof" />
@@ -3914,14 +4519,18 @@ export default function MobileSimulator({
                           </div>
                         </div>
                       ) : (
-                        <button
-                          type="button"
-                          onClick={() => startChallengeCamera('photo')}
-                          className="w-full py-1.5 bg-brand-cyan-soft hover:bg-brand-cyan-soft/80 text-brand-cyan text-[10px] font-bold rounded-lg border border-brand-cyan/25 flex items-center justify-center gap-1 shadow-sm transition-all"
-                        >
-                          <Camera className="h-3.5 w-3.5" />
-                          Open Situation Camera
-                        </button>
+                        <div className="space-y-2">
+                          <button
+                            type="button"
+                            onClick={() => startChallengeCamera('photo')}
+                            className="w-full py-1.5 bg-brand-cyan-soft hover:bg-brand-cyan-soft/80 text-brand-cyan text-[10px] font-bold rounded-lg border border-brand-cyan/25 flex items-center justify-center gap-1 shadow-sm transition-all"
+                          >
+                            <Camera className="h-3.5 w-3.5" />
+                            Open Situation Camera
+                          </button>
+
+                          
+                        </div>
                       )}
                     </div>
 
@@ -3985,14 +4594,14 @@ export default function MobileSimulator({
                               activeChallengeComplaint.latitude,
                               activeChallengeComplaint.longitude
                             );
-                            const withinLimit = dist <= 150;
+                            const withinLimit = dist <= 15;
                             return (
                               <div className="mt-2 p-1.5 rounded bg-brand-dark-bg border border-brand-border/40 flex items-center justify-between">
                                 <span className="text-[8.5px] font-bold uppercase tracking-wider text-brand-text-dim">Proximity Status:</span>
                                 {withinLimit ? (
-                                  <span className="text-emerald-400 font-bold font-mono text-[9px]">✓ Matched ({Math.round(dist)}m away)</span>
+                                  <span className="text-emerald-400 font-bold font-mono text-[9px]">✓ Matched ({formatDistance(dist)} away)</span>
                                 ) : (
-                                  <span className="text-rose-400 font-bold font-mono text-[9px]">❌ Fail ({Math.round(dist)}m away)</span>
+                                  <span className="text-rose-400 font-bold font-mono text-[9px]">❌ Fail ({formatDistance(dist)} away)</span>
                                 )}
                               </div>
                             );
@@ -4012,15 +4621,38 @@ export default function MobileSimulator({
                       )}
                     </div>
 
+                    {/* Item 3: AI Spatial Match Audit */}
+                    {challengePhotoCaptured && (
+                      <div className="border border-brand-border p-3 rounded-xl space-y-2 bg-brand-dark-bg">
+                        <span className="text-[10px] font-bold text-brand-text-main block">3. AI Location Similarity Match</span>
+                        <AIImageSimilarityAudit 
+                          originalImageUrl={activeChallengeComplaint.imageUrl}
+                          compareImageUrl={challengePhotoUrl}
+                          title="Audit Dispute vs. Original Complaint"
+                        />
+                      </div>
+                    )}
+
                   </div>
 
-                  <button
-                    onClick={handleChallengeSubmit}
-                    disabled={!challengePhotoCaptured || !challengeGpsCaptured}
-                    className="w-full py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold uppercase tracking-wider disabled:bg-brand-dark-bg disabled:text-brand-text-dim disabled:border-brand-border transition-all"
-                  >
-                    Submit Dispute Audit
-                  </button>
+                  {(() => {
+                    const dist = calculateDistanceInMeters(
+                      challengeLat !== null ? challengeLat : deviceLocation.lat,
+                      challengeLng !== null ? challengeLng : deviceLocation.lng,
+                      activeChallengeComplaint.latitude,
+                      activeChallengeComplaint.longitude
+                    );
+                    const withinLimit = dist <= 15;
+                    return (
+                      <button
+                        onClick={handleChallengeSubmit}
+                        disabled={!challengePhotoCaptured || !challengeGpsCaptured || !withinLimit}
+                        className="w-full py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold uppercase tracking-wider disabled:bg-brand-dark-bg disabled:text-brand-text-dim disabled:border-brand-border transition-all"
+                      >
+                        Submit Dispute Audit
+                      </button>
+                    );
+                  })()}
                 </div>
               </motion.div>
             )}
@@ -4078,6 +4710,406 @@ export default function MobileSimulator({
                         </button>
                       );
                     })}
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* GOOGLE ACCOUNT SELECTOR SHEET */}
+          <AnimatePresence>
+            {isGoogleSelectorOpen && (
+              <motion.div 
+                initial={{ opacity: 0, y: 100 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 100 }}
+                transition={{ type: "spring", damping: 25, stiffness: 200 }}
+                className="absolute inset-0 bg-[#080808]/95 backdrop-blur-sm z-50 flex flex-col justify-end text-left"
+                id="google-account-selector-overlay"
+              >
+                <div className="bg-brand-dark-card border-t border-brand-border rounded-t-[28px] p-5 space-y-4 max-h-[92%] overflow-y-auto flex flex-col">
+                  {/* Google Logo / Header */}
+                  <div className="flex justify-between items-start pb-2 border-b border-brand-border/40">
+                    <div className="flex flex-col">
+                      <div className="flex items-center gap-1.5 select-none font-display text-base tracking-tight font-bold">
+                        <span className="text-[#4285F4]">G</span>
+                        <span className="text-[#EA4335]">o</span>
+                        <span className="text-[#FBBC05]">o</span>
+                        <span className="text-[#4285F4]">g</span>
+                        <span className="text-[#34A853]">l</span>
+                        <span className="text-[#EA4335]">e</span>
+                        <span className="text-brand-text-dim text-xs ml-1 font-semibold">Sign in</span>
+                      </div>
+                      <span className="text-[10px] text-brand-text-dim mt-1">Choose an account to continue to CivicsGuard</span>
+                    </div>
+                    {!isGoogleSigningIn && (
+                      <button 
+                        onClick={() => {
+                          setIsGoogleSelectorOpen(false);
+                          setIsAddingCustomGoogleAccount(false);
+                        }} 
+                        className="p-1.5 rounded-full hover:bg-brand-dark-bg text-brand-text-dim hover:text-brand-text-main transition-colors"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
+
+                  {isGoogleSigningIn ? (
+                    <div className="py-12 flex flex-col items-center justify-center text-center space-y-4">
+                      {/* Authentic Google Loading Spinner */}
+                      <div className="relative w-10 h-10">
+                        <div className="absolute inset-0 rounded-full border-4 border-[#1c1c1c] border-t-brand-cyan animate-spin"></div>
+                        <div className="absolute inset-1 rounded-full border border-dashed border-brand-cyan/20 animate-pulse"></div>
+                      </div>
+                      <div className="space-y-1">
+                        <h4 className="text-[11px] font-bold text-brand-text-main">Signing in as</h4>
+                        <p className="text-[10px] font-mono text-brand-cyan">{isGoogleSigningIn}</p>
+                        <p className="text-[8.5px] text-brand-text-dim mt-2 animate-pulse">Verifying secure browser credentials...</p>
+                      </div>
+                    </div>
+                  ) : !isAddingCustomGoogleAccount ? (
+                    <div className="space-y-3 flex-1 flex flex-col">
+                      {/* List of simulated active device Gmail accounts */}
+                      <div className="space-y-1.5 max-h-[220px] overflow-y-auto pr-1">
+                        {deviceGmailAccounts.map((account) => {
+                          const isPrimarySession = account.email === 'nitinarora5969@gmail.com';
+                          return (
+                            <button
+                              key={account.email}
+                              onClick={() => handleGoogleSignIn(account.email, account.fullName)}
+                              className={`w-full flex items-center justify-between p-2.5 rounded-xl border transition-all text-left group active:scale-[0.99] ${
+                                isPrimarySession 
+                                  ? 'border-brand-cyan bg-brand-cyan/5 hover:bg-brand-cyan/10' 
+                                  : 'border-brand-border bg-brand-dark-bg hover:bg-brand-dark-bg/60'
+                              }`}
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className="relative">
+                                  <img 
+                                    src={account.avatar} 
+                                    alt={account.fullName} 
+                                    className={`h-8 w-8 rounded-full object-cover ${isPrimarySession ? 'border-2 border-brand-cyan' : 'border border-brand-border'}`} 
+                                    referrerPolicy="no-referrer"
+                                    onError={(e) => {
+                                      e.currentTarget.src = getGoogleFallbackAvatar(account.fullName, account.email);
+                                    }}
+                                  />
+                                  {isPrimarySession && (
+                                    <span className="absolute -bottom-0.5 -right-0.5 flex h-2.5 w-2.5">
+                                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-cyan opacity-75"></span>
+                                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-brand-cyan"></span>
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-1.5">
+                                    <h4 className="text-[11px] font-semibold text-brand-text-main truncate group-hover:text-brand-cyan">{account.fullName}</h4>
+                                    {isPrimarySession && (
+                                      <span className="text-[7px] font-extrabold uppercase px-1 py-0.5 rounded bg-brand-cyan text-brand-dark-bg">Active Browser</span>
+                                    )}
+                                  </div>
+                                  <p className="text-[9px] text-brand-text-dim truncate">{account.email}</p>
+                                </div>
+                              </div>
+                              <ChevronRight className="h-3.5 w-3.5 text-brand-text-dim group-hover:text-brand-cyan transition-colors" />
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      <div className="border-t border-brand-border/40 pt-2">
+                        <button
+                          onClick={() => {
+                            setCustomGoogleEmail('');
+                            setCustomGoogleName('');
+                            setCustomGoogleOtp('');
+                            setCustomGoogleOtpStep('details');
+                            setIsAddingCustomGoogleAccount(true);
+                          }}
+                          className="w-full py-2.5 bg-brand-cyan/5 hover:bg-brand-cyan/10 text-brand-cyan hover:text-white rounded-xl text-[10.5px] font-medium border border-brand-cyan/20 transition-all flex items-center justify-center gap-2"
+                        >
+                          <Plus className="h-3.5 w-3.5 text-brand-cyan" />
+                          Use another Google account
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-3 flex-1 flex flex-col">
+                      <div className="flex items-center gap-1.5 pb-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (customGoogleOtpStep === 'otp') {
+                              setCustomGoogleOtpStep('details');
+                            } else {
+                              setIsAddingCustomGoogleAccount(false);
+                            }
+                          }}
+                          className="px-2 py-1 rounded bg-brand-dark-bg border border-brand-border text-brand-text-main text-[9px] font-semibold flex items-center gap-1"
+                        >
+                          <span>← Back</span>
+                        </button>
+                        <span className="text-[10px] font-semibold text-brand-text-dim">
+                          {customGoogleOtpStep === 'otp' ? 'Verify OTP Code' : 'Add account to device'}
+                        </span>
+                      </div>
+
+                      {customGoogleOtpStep === 'details' ? (
+                        <div className="space-y-3">
+                          <div className="space-y-1">
+                            <label className="text-[8px] font-bold uppercase text-brand-text-dim">Full Name</label>
+                            <input
+                              type="text"
+                              required
+                              placeholder="e.g. Nitin Arora"
+                              value={customGoogleName}
+                              onChange={(e) => setCustomGoogleName(e.target.value)}
+                              className="w-full px-3 py-2 text-[11px] bg-brand-dark-bg border border-brand-border rounded-lg text-brand-text-main placeholder-brand-text-dim/40 focus:outline-none focus:border-brand-cyan transition-colors"
+                            />
+                          </div>
+
+                          <div className="space-y-1">
+                            <label className="text-[8px] font-bold uppercase text-brand-text-dim">Google Email Address</label>
+                            <input
+                              type="email"
+                              required
+                              placeholder="e.g. yourname@gmail.com"
+                              value={customGoogleEmail}
+                              onChange={(e) => setCustomGoogleEmail(e.target.value)}
+                              className="w-full px-3 py-2 text-[11px] bg-brand-dark-bg border border-brand-border rounded-lg text-brand-text-main placeholder-brand-text-dim/40 focus:outline-none focus:border-brand-cyan transition-colors"
+                            />
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!customGoogleEmail.includes('@') || !customGoogleEmail.endsWith('.com')) {
+                                showToast("Please enter a valid Gmail address.", "error");
+                                return;
+                              }
+                              if (!customGoogleName.trim()) {
+                                showToast("Please enter your name.", "error");
+                                return;
+                              }
+
+                              setCustomGoogleOtp('');
+                              setCustomGoogleOtpStep('otp');
+                              showToast(`OTP verification code sent to ${customGoogleEmail}!`, "success");
+                            }}
+                            className="w-full py-2.5 bg-brand-cyan hover:bg-brand-cyan/90 text-brand-dark-bg font-bold rounded-lg text-xs transition-colors shadow-md shadow-brand-cyan/15 flex items-center justify-center gap-1"
+                          >
+                            <span>Send Verification OTP</span>
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          <div className="p-2.5 rounded-xl border border-brand-cyan/20 bg-brand-cyan/5 text-left space-y-1">
+                            <p className="text-[9.5px] font-semibold text-brand-text-main">
+                              Verification OTP Dispatched
+                            </p>
+                            <p className="text-[8.5px] text-brand-text-dim leading-relaxed">
+                              A 4-digit verification code has been generated for <strong className="text-brand-cyan">{customGoogleEmail}</strong>.
+                            </p>
+                            <div className="text-[8.5px] text-amber-300 font-medium leading-relaxed bg-amber-500/10 border border-amber-500/20 p-2 rounded mt-2 space-y-1">
+                              <p className="font-bold text-[9px] text-amber-400">ℹ️ App on Trial</p>
+                              <p>Enter any 4 numbers (e.g. 1234, 0000, 9999) to verify this Gmail as a real Google account.</p>
+                            </div>
+                          </div>
+
+                          <div className="space-y-1">
+                            <label className="text-[8px] font-bold uppercase text-brand-text-dim">4-Digit OTP Code</label>
+                            <input
+                              type="text"
+                              maxLength={4}
+                              required
+                              placeholder="e.g. 1234"
+                              value={customGoogleOtp}
+                              onChange={(e) => {
+                                const val = e.target.value.replace(/\D/g, '');
+                                setCustomGoogleOtp(val);
+                              }}
+                              className="w-full px-3 py-2 text-[12px] font-mono tracking-[0.25em] text-center bg-brand-dark-bg border border-brand-border rounded-lg text-brand-cyan placeholder-brand-text-dim/40 focus:outline-none focus:border-brand-cyan transition-colors font-bold"
+                            />
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (customGoogleOtp.length !== 4) {
+                                showToast("Please enter a valid 4-digit OTP code.", "error");
+                                return;
+                              }
+
+                              const newAccount = {
+                                email: customGoogleEmail.toLowerCase().trim(),
+                                fullName: customGoogleName.trim(),
+                                avatar: `https://unavatar.io/google/${encodeURIComponent(customGoogleEmail.toLowerCase().trim())}`
+                              };
+
+                              setDeviceGmailAccounts(prev => [...prev, newAccount]);
+                              setIsAddingCustomGoogleAccount(false);
+                              handleGoogleSignIn(newAccount.email, newAccount.fullName);
+                            }}
+                            className="w-full py-2.5 bg-brand-cyan hover:bg-brand-cyan/90 text-brand-dark-bg font-bold rounded-lg text-xs transition-colors shadow-md shadow-brand-cyan/15 flex items-center justify-center gap-1"
+                          >
+                            <span>Verify & Sign In</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="pt-2 border-t border-brand-border/40 text-center">
+                    <p className="text-[8.5px] text-brand-text-dim leading-normal">
+                      To safeguard your privacy, CivicsGuard uses secure single-tap OAuth sandboxing simulated directly on this device frame.
+                    </p>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* STATE SELECTOR SHEET */}
+          <AnimatePresence>
+            {isStateSelectorOpen && (
+              <motion.div 
+                initial={{ opacity: 0, y: 100 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 100 }}
+                transition={{ type: "spring", damping: 25, stiffness: 200 }}
+                className="absolute inset-0 bg-[#080808]/95 backdrop-blur-sm z-50 flex flex-col justify-end text-left"
+                id="state-selector-overlay"
+              >
+                <div className="bg-brand-dark-card border-t border-brand-border rounded-t-[28px] p-5 space-y-4 max-h-[92%] flex flex-col">
+                  <div className="flex justify-between items-center border-b border-brand-border/40 pb-2">
+                    <div className="flex flex-col">
+                      <span className="text-xs font-display font-bold text-brand-cyan uppercase">Select Assigned State</span>
+                      <span className="text-[9px] text-brand-text-dim">Choose the state for official duty scope</span>
+                    </div>
+                    <button 
+                      onClick={() => setIsStateSelectorOpen(false)} 
+                      className="p-1 rounded-full hover:bg-brand-dark-bg transition-colors"
+                    >
+                      <X className="h-4 w-4 text-brand-text-dim" />
+                    </button>
+                  </div>
+
+                  {/* Search bar */}
+                  <div className="relative">
+                    <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-brand-text-dim" />
+                    <input
+                      type="text"
+                      value={stateSearchQuery}
+                      onChange={(e) => setStateSearchQuery(e.target.value)}
+                      placeholder="Search state..."
+                      className="w-full bg-brand-dark-bg border border-brand-border rounded-lg pl-9 pr-3 py-2 text-xs text-brand-text-main focus:outline-none focus:border-brand-cyan placeholder-brand-text-dim/50"
+                    />
+                  </div>
+
+                  {/* States list */}
+                  <div className="flex-1 overflow-y-auto space-y-1 max-h-[300px] pr-1">
+                    {INDIA_STATES.filter(state =>
+                      state.toLowerCase().includes(stateSearchQuery.toLowerCase())
+                    ).map((state) => (
+                      <button
+                        key={state}
+                        type="button"
+                        onClick={() => {
+                          setSelectedState(state);
+                          const districts = INDIA_STATES_AND_DISTRICTS[state] || [];
+                          if (districts.length > 0) {
+                            setSelectedDistrict(districts[0]);
+                          } else {
+                            setSelectedDistrict('');
+                          }
+                          setIsStateSelectorOpen(false);
+                        }}
+                        className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-colors flex items-center justify-between border ${
+                          selectedState === state
+                            ? 'bg-brand-cyan/10 border-brand-cyan/40 text-brand-cyan font-bold'
+                            : 'bg-brand-dark-bg border-brand-border/40 text-brand-text-main hover:bg-[#121212]'
+                        }`}
+                      >
+                        <span>{state}</span>
+                        {selectedState === state && <Check className="h-3.5 w-3.5 text-brand-cyan" />}
+                      </button>
+                    ))}
+                    {INDIA_STATES.filter(state =>
+                      state.toLowerCase().includes(stateSearchQuery.toLowerCase())
+                    ).length === 0 && (
+                      <p className="text-center text-xs text-brand-text-dim py-4">No matching states found.</p>
+                    )}
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* DISTRICT SELECTOR SHEET */}
+          <AnimatePresence>
+            {isDistrictSelectorOpen && (
+              <motion.div 
+                initial={{ opacity: 0, y: 100 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 100 }}
+                transition={{ type: "spring", damping: 25, stiffness: 200 }}
+                className="absolute inset-0 bg-[#080808]/95 backdrop-blur-sm z-50 flex flex-col justify-end text-left"
+                id="district-selector-overlay"
+              >
+                <div className="bg-brand-dark-card border-t border-brand-border rounded-t-[28px] p-5 space-y-4 max-h-[92%] flex flex-col">
+                  <div className="flex justify-between items-center border-b border-brand-border/40 pb-2">
+                    <div className="flex flex-col">
+                      <span className="text-xs font-display font-bold text-brand-cyan uppercase">Select Assigned District</span>
+                      <span className="text-[9px] text-brand-text-dim">Municipal district scope within {selectedState}</span>
+                    </div>
+                    <button 
+                      onClick={() => setIsDistrictSelectorOpen(false)} 
+                      className="p-1 rounded-full hover:bg-brand-dark-bg transition-colors"
+                    >
+                      <X className="h-4 w-4 text-brand-text-dim" />
+                    </button>
+                  </div>
+
+                  {/* Search bar */}
+                  <div className="relative">
+                    <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-brand-text-dim" />
+                    <input
+                      type="text"
+                      value={districtSearchQuery}
+                      onChange={(e) => setDistrictSearchQuery(e.target.value)}
+                      placeholder="Search district..."
+                      className="w-full bg-brand-dark-bg border border-brand-border rounded-lg pl-9 pr-3 py-2 text-xs text-brand-text-main focus:outline-none focus:border-brand-cyan placeholder-brand-text-dim/50"
+                    />
+                  </div>
+
+                  {/* Districts list */}
+                  <div className="flex-1 overflow-y-auto space-y-1 max-h-[300px] pr-1">
+                    {(INDIA_STATES_AND_DISTRICTS[selectedState] || [])
+                      .filter(dist => dist.toLowerCase().includes(districtSearchQuery.toLowerCase()))
+                      .map((dist) => (
+                        <button
+                          key={dist}
+                          type="button"
+                          onClick={() => {
+                            setSelectedDistrict(dist);
+                            setIsDistrictSelectorOpen(false);
+                          }}
+                          className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-colors flex items-center justify-between border ${
+                            selectedDistrict === dist
+                              ? 'bg-brand-cyan/10 border-brand-cyan/40 text-brand-cyan font-bold'
+                              : 'bg-brand-dark-bg border-brand-border/40 text-brand-text-main hover:bg-[#121212]'
+                          }`}
+                        >
+                          <span>{dist}</span>
+                          {selectedDistrict === dist && <Check className="h-3.5 w-3.5 text-brand-cyan" />}
+                        </button>
+                      ))}
+                    {(INDIA_STATES_AND_DISTRICTS[selectedState] || [])
+                      .filter(dist => dist.toLowerCase().includes(districtSearchQuery.toLowerCase()))
+                      .length === 0 && (
+                      <p className="text-center text-xs text-brand-text-dim py-4">No matching districts found.</p>
+                    )}
                   </div>
                 </div>
               </motion.div>

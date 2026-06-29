@@ -102,7 +102,7 @@ export async function checkAndCreateComplaint(req: Request, res: Response) {
 
   const verifySnippet = `/**
  * Crowdsourced GPS Verification & Coin Rewards Controller
- * Validates selfie & location proximity (<= 150m) before granting verifier coins.
+ * Validates selfie & location proximity (<= 15m) before granting verifier coins.
  */
 import { Request, Response } from 'express';
 import { pool } from '../db';
@@ -111,7 +111,7 @@ export async function verifyComplaintLocation(req: Request, res: Response) {
   const { verifierId, complaintId, verifierLatitude, verifierLongitude, selfieUrl } = req.body;
 
   try {
-    const PROXIMITY_LIMIT_METERS = 150;
+    const PROXIMITY_LIMIT_METERS = 15;
     const REVIEWER_LIMIT_CAP = 10;
 
     // 1. Fetch complaint and compute distance from the verifier's live GPS coordinates
@@ -139,7 +139,7 @@ export async function verifyComplaintLocation(req: Request, res: Response) {
       return res.status(400).json({ error: "INVALID_STATUS", message: "Verification only permitted on pending issues." });
     }
 
-    // 2. Proximity GPS Check: Must be within 150 meters
+    // 2. Proximity GPS Check: Must be within 15 meters
     const distanceMeters = complaint.distance_meters;
     const isWithinGeofence = distanceMeters <= PROXIMITY_LIMIT_METERS;
 

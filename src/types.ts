@@ -85,3 +85,23 @@ export interface SystemLog {
   message: string;
   details?: any;
 }
+
+export interface AISimilarityFeature {
+  matched: boolean;
+  details: string;
+}
+
+export interface AISimilarityResult {
+  similarityScore: number;
+  isMatch: boolean;
+  reasoning: string;
+  features: {
+    road_shape: AISimilarityFeature;
+    buildings: AISimilarityFeature;
+    trees: AISimilarityFeature;
+    electric_poles: AISimilarityFeature;
+    drain_covers: AISimilarityFeature;
+    footpaths: AISimilarityFeature;
+    landmarks: AISimilarityFeature;
+  };
+}

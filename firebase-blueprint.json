@@ -1,0 +1,91 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Represents a citizen or government officer user profile in the system",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "emailOrPhone": { "type": "string" },
+        "fullName": { "type": "string" },
+        "role": { "type": "string", "enum": ["citizen", "officer"] },
+        "state": { "type": "string" },
+        "district": { "type": "string" },
+        "coinBalance": { "type": "number" },
+        "createdAt": { "type": "string" },
+        "username": { "type": "string" },
+        "avatarUrl": { "type": "string" }
+      },
+      "required": ["id", "emailOrPhone", "fullName", "role", "coinBalance", "createdAt"]
+    },
+    "Complaint": {
+      "title": "Complaint",
+      "description": "Represents a civic complaint filed by a citizen",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "reporterId": { "type": "string" },
+        "reporterName": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "latitude": { "type": "number" },
+        "longitude": { "type": "number" },
+        "address": { "type": "string" },
+        "state": { "type": "string" },
+        "district": { "type": "string" },
+        "status": { "type": "string" },
+        "verificationsCount": { "type": "number" },
+        "verifiedUserIds": { "type": "array" },
+        "createdAt": { "type": "string" },
+        "resolvedPhotoUrl": { "type": "string" },
+        "resolveMessage": { "type": "string" }
+      },
+      "required": ["id", "reporterId", "reporterName", "title", "description", "latitude", "longitude", "address", "state", "district", "status", "verificationsCount", "verifiedUserIds", "createdAt"]
+    },
+    "ChatRoom": {
+      "title": "ChatRoom",
+      "description": "Represents a chat room associated with a complaint for multi-user/officer discussion",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "complaintId": { "type": "string" },
+        "title": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "complaintId", "title", "createdAt"]
+    },
+    "Message": {
+      "title": "Message",
+      "description": "Represents a single message sent inside a chat room",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "senderId": { "type": "string" },
+        "senderName": { "type": "string" },
+        "senderRole": { "type": "string" },
+        "text": { "type": "string" },
+        "timestamp": { "type": "string" }
+      },
+      "required": ["id", "senderId", "senderName", "senderRole", "text", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "Store user profiles keyed by their sanitized identity (email/phone)"
+    },
+    "/complaints/{complaintId}": {
+      "schema": "Complaint",
+      "description": "Store all community complaints"
+    },
+    "/chatRooms/{roomId}": {
+      "schema": "ChatRoom",
+      "description": "Store chat rooms"
+    },
+    "/chatRooms/{roomId}/messages/{messageId}": {
+      "schema": "Message",
+      "description": "Store messages under each chat room"
+    }
+  }
+}
