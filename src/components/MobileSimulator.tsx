@@ -419,6 +419,51 @@ export default function MobileSimulator({
   const [testMailUrl, setTestMailUrl] = useState<string | null>(null);
   const [showGovDisclaimer, setShowGovDisclaimer] = useState(false);
   
+  // OTP input refs and handlers for separate 4 digit boxes
+  const otpRefs = [
+    useRef<HTMLInputElement>(null),
+    useRef<HTMLInputElement>(null),
+    useRef<HTMLInputElement>(null),
+    useRef<HTMLInputElement>(null)
+  ];
+
+  const handleOtpDigitChange = (index: number, value: string) => {
+    const cleanValue = value.replace(/\D/g, '').slice(-1);
+    
+    let newOtp = ['', '', '', ''];
+    for (let i = 0; i < 4; i++) {
+      newOtp[i] = otpInput[i] || '';
+    }
+    newOtp[index] = cleanValue;
+    
+    const finalOtp = newOtp.join('');
+    setOtpInput(finalOtp);
+
+    // Shift focus forward if typed a digit
+    if (cleanValue && index < 3) {
+      setTimeout(() => {
+        otpRefs[index + 1].current?.focus();
+      }, 10);
+    }
+  };
+
+  const handleOtpKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Backspace') {
+      const currentVal = otpInput[index] || '';
+      if (!currentVal && index > 0) {
+        let newOtp = ['', '', '', ''];
+        for (let i = 0; i < 4; i++) {
+          newOtp[i] = otpInput[i] || '';
+        }
+        newOtp[index - 1] = '';
+        setOtpInput(newOtp.join(''));
+        setTimeout(() => {
+          otpRefs[index - 1].current?.focus();
+        }, 10);
+      }
+    }
+  };
+  
   // Government Onboarding
   const [isOnboarding, setIsOnboarding] = useState(false);
   const [selectedState, setSelectedState] = useState('Delhi');
@@ -2628,18 +2673,25 @@ export default function MobileSimulator({
                             <p className="text-[9.5px] text-brand-text-dim mb-2 leading-relaxed">
                               A secure code has been dispatched to <strong className="text-brand-text-main font-semibold">{loginInput}</strong>.
                             </p>
-                            <input
-                              type="tel"
-                              pattern="\d*"
-                              maxLength={4}
-                              placeholder="e.g., 1234"
-                              value={otpInput}
-                              onChange={(e) => setOtpInput(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                              className="w-full text-center bg-[#141414] border border-brand-cyan rounded-lg px-3 py-2.5 text-lg font-mono tracking-[1em] pl-[1.5em] text-brand-cyan focus:outline-none focus:ring-1 focus:ring-brand-cyan"
-                              required
-                              disabled={authLoading}
-                              autoFocus
-                            />
+                            <div className="flex justify-center gap-3 py-3" id="otp-boxes-container">
+                              {[0, 1, 2, 3].map((index) => (
+                                <input
+                                  key={index}
+                                  ref={otpRefs[index]}
+                                  type="tel"
+                                  pattern="\d*"
+                                  maxLength={1}
+                                  placeholder="-"
+                                  value={otpInput[index] || ''}
+                                  onChange={(e) => handleOtpDigitChange(index, e.target.value)}
+                                  onKeyDown={(e) => handleOtpKeyDown(index, e)}
+                                  className="w-12 h-12 text-center bg-[#141414] border border-brand-border rounded-lg text-lg font-bold text-brand-cyan placeholder-brand-text-dim/40 focus:outline-none focus:border-brand-cyan focus:ring-1 focus:ring-brand-cyan transition-all"
+                                  required
+                                  disabled={authLoading}
+                                  autoFocus={index === 0}
+                                />
+                              ))}
+                            </div>
                             <div className="mt-3 p-2.5 rounded border border-amber-500/20 bg-amber-500/10 text-amber-300 text-[9.5px] leading-relaxed">
                               <strong className="text-amber-400 font-bold uppercase tracking-wider block text-[8px] mb-0.5">Trial Mode Notice</strong>
                               You can enter <strong className="text-brand-cyan font-bold">any 4-digit code</strong> (e.g. <code className="font-mono text-emerald-400 bg-black/40 px-1 py-0.5 rounded">1234</code>) to successfully log in.
