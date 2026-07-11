@@ -3145,18 +3145,47 @@ export default function MobileSimulator({
                           )}
                         </div>
 
-                        {currentUser.role === 'citizen' && (
-                          <button
-                            onClick={() => {
-                              setIsProfileOpen(false);
-                              setActiveCoinsTab('redeem');
-                              setIsCoinsOpen(true);
-                            }}
-                            className="w-full mt-1.5 py-2 bg-gradient-to-r from-brand-coin/20 to-amber-500/10 border border-brand-coin/30 hover:from-brand-coin/30 hover:to-amber-500/20 text-brand-coin font-bold rounded-xl text-[10px] uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 shadow-inner"
-                          >
-                            <Gift className="h-3.5 w-3.5 text-brand-coin" />
-                            Manage & Redeem Rewards
-                          </button>
+                        {currentUser.role === 'citizen' ? (
+                          <div className="space-y-2">
+                            <button
+                              onClick={() => {
+                                setIsProfileOpen(false);
+                                setActiveCoinsTab('redeem');
+                                setIsCoinsOpen(true);
+                              }}
+                              className="w-full mt-1.5 py-2 bg-gradient-to-r from-brand-coin/20 to-amber-500/10 border border-brand-coin/30 hover:from-brand-coin/30 hover:to-amber-500/20 text-brand-coin font-bold rounded-xl text-[10px] uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 shadow-inner"
+                            >
+                              <Gift className="h-3.5 w-3.5 text-brand-coin" />
+                              Manage & Redeem Rewards
+                            </button>
+
+                            <button
+                              onClick={() => {
+                                onAddLog('auth', 'Initiating switch to Government Authority Portal.');
+                                setCurrentUser(null);
+                                setIsOtpSent(false);
+                                setIsProfileOpen(false);
+                                setLoginInput('');
+                                setOtpInput('');
+                                setActiveTab('pending');
+                                setLoginRole('officer');
+                              }}
+                              className="w-full py-2 bg-brand-cyan/10 border border-brand-cyan/20 hover:bg-brand-cyan/20 text-brand-cyan font-bold rounded-xl text-[10px] uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 shadow-inner"
+                            >
+                              <ShieldAlert className="h-3.5 w-3.5 text-brand-cyan" />
+                              Login as Govt Officer
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            <button
+                              onClick={handleLogout}
+                              className="w-full mt-1.5 py-2 bg-rose-500/10 border border-rose-500/20 hover:bg-rose-500/20 text-rose-400 font-bold rounded-xl text-[10px] uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 shadow-inner active:scale-95"
+                            >
+                              <LogOut className="h-3.5 w-3.5 text-rose-400" />
+                              Log Out
+                            </button>
+                          </div>
                         )}
                       </div>
                     </div>
@@ -3310,10 +3339,11 @@ export default function MobileSimulator({
                     </div>
                   </div>
 
-                  <div className="flex justify-center pt-2">
+                  {/* Inline Log Out Button inside the scrollable content to ensure background stays transparent */}
+                  <div className="flex justify-center pt-6 pb-4">
                     <button
                       onClick={handleLogout}
-                      className="px-6 py-2 bg-rose-500/10 border border-rose-500/20 hover:bg-rose-500/20 text-rose-400 font-bold rounded-xl text-xs transition-colors flex items-center justify-center gap-1.5"
+                      className="px-6 py-2.5 bg-rose-500/10 hover:bg-rose-500/20 active:scale-95 text-rose-400 font-bold rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 border border-transparent"
                     >
                       <LogOut className="h-3.5 w-3.5" />
                       Log Out
