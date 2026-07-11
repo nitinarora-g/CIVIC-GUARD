@@ -105,11 +105,32 @@ const customFetch = async (input: RequestInfo | URL, init?: RequestInit): Promis
 
       // 4. POST /api/update-profile
       if (url.endsWith('/api/update-profile')) {
-        const updatedUser = body;
-        if (updatedUser && updatedUser.id) {
-          mockUsersList[updatedUser.id] = updatedUser;
+        const { id, emailOrPhone, fullName, username, avatarUrl, state, district, coinBalance } = body;
+        let user: any = null;
+        if (id) {
+          user = mockUsersList[id];
+        }
+        if (!user && emailOrPhone) {
+          const normalized = emailOrPhone.trim().toLowerCase();
+          user = Object.values(mockUsersList).find((u: any) => u.emailOrPhone.toLowerCase() === normalized);
+        }
+
+        if (!user && emailOrPhone) {
+          const isOfficer = emailOrPhone.includes('@') && emailOrPhone.toLowerCase().endsWith('gov.in');
+          user = findUserByInput(emailOrPhone, isOfficer ? 'officer' : 'citizen');
+        }
+
+        if (user) {
+          if (fullName !== undefined) user.fullName = fullName;
+          if (username !== undefined) user.username = username;
+          if (avatarUrl !== undefined) user.avatarUrl = avatarUrl;
+          if (state !== undefined) user.state = state;
+          if (district !== undefined) user.district = district;
+          if (coinBalance !== undefined) user.coinBalance = coinBalance;
+
+          mockUsersList[user.id] = user;
           setLocalData('civicguard_users', mockUsersList);
-          return respondWithJson({ success: true, user: updatedUser });
+          return respondWithJson({ success: true, user });
         }
         return respondWithJson({ error: "Invalid user data" }, 400);
       }
