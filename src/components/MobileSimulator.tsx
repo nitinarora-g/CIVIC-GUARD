@@ -1303,14 +1303,47 @@ export default function MobileSimulator({
     setAuthLoading(true);
     setTestMailUrl(null);
     try {
-      const response = await fetch('/api/verify-otp', {
+      const response = await fetch('/api/send-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ emailOrPhone: loginInput, otpInput: '1234', role: loginRole })
+        body: JSON.stringify({ emailOrPhone: loginInput, role: loginRole })
       });
       const data = await response.json();
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to authenticate');
+        throw new Error(data.error || 'Failed to dispatch verification code');
+      }
+
+      setIsOtpSent(true);
+      setOtpInput('');
+      onAddLog('auth', `OTP requested for ${loginInput}. Trial Mode: use any 4-digit code (e.g., 1234).`);
+    } catch (err: any) {
+      console.error(err);
+      onAddLog('auth', `OTP Request Failed: ${err.message}`);
+      alert(`OTP Request Failed: ${err.message}`);
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!otpInput.trim()) return;
+
+    if (otpInput.length !== 4 || !/^\d{4}$/.test(otpInput)) {
+      alert('Please enter a 4-digit verification code.');
+      return;
+    }
+
+    setAuthLoading(true);
+    try {
+      const response = await fetch('/api/verify-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ emailOrPhone: loginInput, otpInput: otpInput, role: loginRole })
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to verify code');
       }
 
       if (loginRole === 'officer') {
@@ -1322,15 +1355,11 @@ export default function MobileSimulator({
       }
     } catch (err: any) {
       console.error(err);
-      onAddLog('auth', `Authentication Failed: ${err.message}`);
-      alert(`Authentication Failed: ${err.message}`);
+      onAddLog('auth', `Verification Failed: ${err.message}`);
+      alert(`Verification Failed: ${err.message}`);
     } finally {
       setAuthLoading(false);
     }
-  };
-
-  const handleVerifyOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
   };
 
   const handleGoogleSignIn = (selectedEmail?: string, selectedName?: string) => {
@@ -2586,91 +2615,145 @@ export default function MobileSimulator({
                     </button>
                   </div>
                 ) : (
-                  /* Standard OTP Form */
+                  /* Standard OTP Form / Enter OTP Form */
                   <div className="space-y-3">
-                    <div>
-                      <form onSubmit={handleSendOtp} className="space-y-3">
-                        <div className="space-y-1">
-                          <label className="text-[8px] font-bold uppercase text-brand-text-dim block">
-                            {loginRole === 'citizen' ? '10-Digit Mobile Number' : 'Government Email ID'}
-                          </label>
-                          <input
-                            type={loginRole === 'citizen' ? 'tel' : 'email'}
-                            placeholder={loginRole === 'citizen' ? 'e.g., 9876543210' : 'e.g., amit.kumar@gov.in'}
-                            value={loginInput}
-                            maxLength={loginRole === 'citizen' ? 10 : undefined}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              if (loginRole === 'citizen') {
-                                setLoginInput(val.replace(/\D/g, '').slice(0, 10));
-                              } else {
-                                setLoginInput(val);
-                              }
-                              setShowGovDisclaimer(false);
-                            }}
-                            className="w-full bg-brand-dark-bg border border-brand-border rounded-lg px-3 py-2 text-xs text-brand-text-main focus:outline-none focus:border-brand-cyan"
-                            required
-                            disabled={authLoading}
-                          />
-                        </div>
-
-                        {loginRole === 'officer' && showGovDisclaimer && (
-                          <div className="p-2.5 rounded-lg border border-rose-500/30 bg-rose-500/10 text-rose-300 text-[9.5px] leading-relaxed transition-all">
-                            <p className="font-bold flex items-center gap-1 uppercase tracking-wider text-[8px] text-rose-400">
-                              <span className="inline-block w-1.5 h-1.5 rounded-full bg-rose-400 animate-pulse"></span>
-                              official Gov.in Disclaimer
+                    {isOtpSent ? (
+                      /* ENTER OTP SCREEN */
+                      <div>
+                        <form onSubmit={handleVerifyOtp} className="space-y-4 animate-fade-in">
+                          <div className="space-y-1">
+                            <label className="text-[8px] font-bold uppercase text-brand-cyan block">
+                              Enter 4-Digit OTP Code
+                            </label>
+                            <p className="text-[9.5px] text-brand-text-dim mb-2 leading-relaxed">
+                              A secure code has been dispatched to <strong className="text-brand-text-main font-semibold">{loginInput}</strong>.
                             </p>
-                            <p className="mt-1">
-                              Government employee accounts must log in using an official email ending with <strong className="text-brand-cyan font-bold">gov.in</strong> (e.g., <code className="bg-black/30 px-1 py-0.5 rounded text-emerald-400 font-mono text-[9px]">amit.kumar@gov.in</code>). Normal domains (Gmail, Yahoo, etc.) are strictly prohibited for authority roles.
-                            </p>
-                          </div>
-                        )}
-                        <button
-                          type="submit"
-                          disabled={authLoading}
-                          className="w-full py-2 bg-brand-cyan text-brand-dark-bg font-bold rounded-lg text-xs transition-colors shadow-md shadow-brand-cyan/10 disabled:opacity-50"
-                        >
-                          {authLoading ? 'Signing In...' : 'Sign In & Access Console'}
-                        </button>
-                      </form>
-
-                      {loginRole === 'citizen' && (
-                        <>
-                          <div className="relative my-3 flex py-1 items-center">
-                            <div className="flex-grow border-t border-brand-border/40"></div>
-                            <span className="flex-shrink mx-3 text-[9px] text-brand-text-dim uppercase tracking-wider font-semibold">or</span>
-                            <div className="flex-grow border-t border-brand-border/40"></div>
+                            <input
+                              type="tel"
+                              pattern="\d*"
+                              maxLength={4}
+                              placeholder="e.g., 1234"
+                              value={otpInput}
+                              onChange={(e) => setOtpInput(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                              className="w-full text-center bg-[#141414] border border-brand-cyan rounded-lg px-3 py-2.5 text-lg font-mono tracking-[1em] pl-[1.5em] text-brand-cyan focus:outline-none focus:ring-1 focus:ring-brand-cyan"
+                              required
+                              disabled={authLoading}
+                              autoFocus
+                            />
+                            <div className="mt-3 p-2.5 rounded border border-amber-500/20 bg-amber-500/10 text-amber-300 text-[9.5px] leading-relaxed">
+                              <strong className="text-amber-400 font-bold uppercase tracking-wider block text-[8px] mb-0.5">Trial Mode Notice</strong>
+                              You can enter <strong className="text-brand-cyan font-bold">any 4-digit code</strong> (e.g. <code className="font-mono text-emerald-400 bg-black/40 px-1 py-0.5 rounded">1234</code>) to successfully log in.
+                            </div>
                           </div>
 
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsOtpSent(false);
+                                setOtpInput('');
+                              }}
+                              className="flex-1 py-2 bg-[#141414] border border-brand-border text-brand-text-dim text-xs font-semibold rounded-lg hover:text-brand-text-main transition-colors"
+                              disabled={authLoading}
+                            >
+                              Back
+                            </button>
+                            <button
+                              type="submit"
+                              disabled={authLoading}
+                              className="flex-1 py-2 bg-brand-cyan text-brand-dark-bg font-bold rounded-lg text-xs transition-colors shadow-md shadow-brand-cyan/10 disabled:opacity-50"
+                            >
+                              {authLoading ? 'Verifying...' : 'Verify & Continue'}
+                            </button>
+                          </div>
+                        </form>
+                      </div>
+                    ) : (
+                      /* EMAIL/PHONE INPUT SCREEN */
+                      <div>
+                        <form onSubmit={handleSendOtp} className="space-y-3">
+                          <div className="space-y-1">
+                            <label className="text-[8px] font-bold uppercase text-brand-text-dim block">
+                              {loginRole === 'citizen' ? '10-Digit Mobile Number' : 'Government Email ID'}
+                            </label>
+                            <input
+                              type={loginRole === 'citizen' ? 'tel' : 'email'}
+                              placeholder={loginRole === 'citizen' ? 'e.g., 9876543210' : 'e.g., amit.kumar@gov.in'}
+                              value={loginInput}
+                              maxLength={loginRole === 'citizen' ? 10 : undefined}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                if (loginRole === 'citizen') {
+                                  setLoginInput(val.replace(/\D/g, '').slice(0, 10));
+                                } else {
+                                  setLoginInput(val);
+                                }
+                                setShowGovDisclaimer(false);
+                              }}
+                              className="w-full bg-brand-dark-bg border border-brand-border rounded-lg px-3 py-2 text-xs text-brand-text-main focus:outline-none focus:border-brand-cyan"
+                              required
+                              disabled={authLoading}
+                            />
+                          </div>
+
+                          {loginRole === 'officer' && showGovDisclaimer && (
+                            <div className="p-2.5 rounded-lg border border-rose-500/30 bg-rose-500/10 text-rose-300 text-[9.5px] leading-relaxed transition-all">
+                              <p className="font-bold flex items-center gap-1 uppercase tracking-wider text-[8px] text-rose-400">
+                                <span className="inline-block w-1.5 h-1.5 rounded-full bg-rose-400 animate-pulse"></span>
+                                official Gov.in Disclaimer
+                              </p>
+                              <p className="mt-1">
+                                Government employee accounts must log in using an official email ending with <strong className="text-brand-cyan font-bold">gov.in</strong> (e.g., <code className="bg-black/30 px-1 py-0.5 rounded text-emerald-400 font-mono text-[9px]">amit.kumar@gov.in</code>). Normal domains (Gmail, Yahoo, etc.) are strictly prohibited for authority roles.
+                              </p>
+                            </div>
+                          )}
                           <button
-                            type="button"
-                            onClick={handleGoogleSignIn}
+                            type="submit"
                             disabled={authLoading}
-                            className="w-full py-2 bg-[#141414] hover:bg-[#1c1c1c] text-brand-text-main border border-brand-border hover:border-brand-border/80 font-semibold rounded-lg text-xs transition-all flex items-center justify-center gap-2 shadow-sm active:scale-[0.99] disabled:opacity-50"
+                            className="w-full py-2 bg-brand-cyan text-brand-dark-bg font-bold rounded-lg text-xs transition-colors shadow-md shadow-brand-cyan/10 disabled:opacity-50"
                           >
-                            <svg className="h-3.5 w-3.5" viewBox="0 0 24 24">
-                              <path
-                                fill="#4285F4"
-                                d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                              />
-                              <path
-                                fill="#34A853"
-                                d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                              />
-                              <path
-                                fill="#FBBC05"
-                                d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
-                              />
-                              <path
-                                fill="#EA4335"
-                                d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
-                              />
-                            </svg>
-                            <span>Sign in with Google</span>
+                            {authLoading ? 'Sending OTP...' : 'Send Verification OTP'}
                           </button>
-                        </>
-                      )}
-                    </div>
+                        </form>
+
+                        {loginRole === 'citizen' && (
+                          <>
+                            <div className="relative my-3 flex py-1 items-center">
+                              <div className="flex-grow border-t border-brand-border/40"></div>
+                              <span className="flex-shrink mx-3 text-[9px] text-brand-text-dim uppercase tracking-wider font-semibold">or</span>
+                              <div className="flex-grow border-t border-brand-border/40"></div>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={handleGoogleSignIn}
+                              disabled={authLoading}
+                              className="w-full py-2 bg-[#141414] hover:bg-[#1c1c1c] text-brand-text-main border border-brand-border hover:border-brand-border/80 font-semibold rounded-lg text-xs transition-all flex items-center justify-center gap-2 shadow-sm active:scale-[0.99] disabled:opacity-50"
+                            >
+                              <svg className="h-3.5 w-3.5" viewBox="0 0 24 24">
+                                <path
+                                  fill="#4285F4"
+                                  d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                                />
+                                <path
+                                  fill="#34A853"
+                                  d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                                />
+                                <path
+                                  fill="#FBBC05"
+                                  d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+                                />
+                                <path
+                                  fill="#EA4335"
+                                  d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+                                />
+                              </svg>
+                              <span>Sign in with Google</span>
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

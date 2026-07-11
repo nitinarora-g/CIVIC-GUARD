@@ -84,9 +84,22 @@ const customFetch = async (input: RequestInfo | URL, init?: RequestInit): Promis
         return respondWithJson({ status: "ok", mode: "static-mock" });
       }
 
+      // 1.5. POST /api/send-otp
+      if (url.endsWith('/api/send-otp')) {
+        return respondWithJson({ 
+          success: true, 
+          message: "OTP sent successfully. Please enter any 4-digit number to log in.", 
+          simulatedOtp: "1234",
+          isSimulated: true 
+        });
+      }
+
       // 2. POST /api/verify-otp
       if (url.endsWith('/api/verify-otp')) {
-        const { emailOrPhone, role } = body;
+        const { emailOrPhone, otpInput, role } = body;
+        if (!otpInput || !/^\d{4}$/.test(otpInput)) {
+          return respondWithJson({ error: "Invalid code format. Please enter any 4-digit number to log in." }, 400);
+        }
         const user = findUserByInput(emailOrPhone || 'guest', role || 'citizen');
         return respondWithJson({ success: true, user });
       }

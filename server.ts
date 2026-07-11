@@ -671,6 +671,36 @@ Be objective and strict. If they are completely different streets, similaritySco
     }
   });
 
+  // API Route: Send OTP
+  app.post("/api/send-otp", (req, res) => {
+    try {
+      const { emailOrPhone, role } = req.body;
+      if (!emailOrPhone) {
+        return res.status(400).json({ error: "Email or Phone number is required" });
+      }
+
+      const normalizedInput = emailOrPhone.trim().toLowerCase();
+      
+      if (role === "officer") {
+        if (!normalizedInput.includes("@") || !normalizedInput.endsWith("gov.in")) {
+          return res.status(400).json({ error: "Government employees must log in with an official email ending with gov.in" });
+        }
+      }
+
+      console.log(`[AUTH] OTP requested for '${normalizedInput}' (${role})`);
+
+      return res.json({
+        success: true,
+        message: "OTP sent successfully. Please use any 4-digit number to log in.",
+        simulatedOtp: "1234",
+        isSimulated: true
+      });
+    } catch (error: any) {
+      console.error("Error in send-otp API:", error);
+      res.status(500).json({ error: "Internal server error while processing verification code" });
+    }
+  });
+
   // API Route: Verify OTP
   app.post("/api/verify-otp", (req, res) => {
     try {
